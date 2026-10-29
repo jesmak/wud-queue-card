@@ -1,4 +1,4 @@
-/*! wud-queue-card 1.0.3 | MIT License */
+/*! wud-queue-card 1.1.0 | MIT License */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -604,7 +604,7 @@ function r5(r6) {
 }
 
 // src/const.ts
-var CARD_VERSION = "1.0.3";
+var CARD_VERSION = "1.1.0";
 var START_TIMEOUT = 6e4;
 var VERSION_GRACE = 12e4;
 var DONE_KEEP = 6e5;
@@ -760,6 +760,70 @@ function retryable(hass, queue) {
   return queue.items.some((item) => item.status !== "done" && item.entities.some((e5) => hass.states[e5.entity_id]?.state === "on"));
 }
 
+// src/height.ts
+var HEIGHT_MODES = ["auto", "fixed", "max"];
+var pixels = (value) => value == null || typeof value === "number" && Number.isFinite(value) && value > 0;
+function validHeight(config) {
+  return (config.height_mode == null || HEIGHT_MODES.includes(config.height_mode)) && pixels(config.height) && pixels(config.max_height);
+}
+function heightMode(config) {
+  return config.height_mode ?? (config.height ? "fixed" : config.max_height ? "max" : "auto");
+}
+var ROW_HEIGHT = 56;
+var ROW_GAP = 8;
+function heightStyle(config, layout, minimum = 0) {
+  const rows = config.grid_options ? config.grid_options.rows : config.layout_options?.grid_rows;
+  if (layout === "grid" && typeof rows === "number") {
+    return "height: 100%";
+  }
+  const mode = heightMode(config);
+  if (mode === "fixed" && config.height) {
+    return `height: ${Math.max(config.height, minimum)}px`;
+  }
+  return mode === "max" && config.max_height ? `max-height: ${Math.max(config.max_height, minimum)}px` : "";
+}
+function gridMinRows(minimum) {
+  return Math.max(1, Math.ceil((minimum + ROW_GAP) / (ROW_HEIGHT + ROW_GAP)));
+}
+function heightCardSize(config, content, minimum = 0) {
+  const mode = heightMode(config);
+  if (mode === "fixed" && config.height) {
+    return Math.max(1, Math.round(Math.max(config.height, minimum) / 50));
+  }
+  return mode === "max" && config.max_height ? Math.max(1, Math.min(content, Math.round(Math.max(config.max_height, minimum) / 50))) : content;
+}
+function heightSchema(config, text2) {
+  const mode = heightMode(config);
+  const field = (name) => ({
+    name,
+    selector: { number: { min: 100, max: 2e3, step: 10, unit_of_measurement: "px", mode: "box" } }
+  });
+  return [
+    {
+      name: "height_mode",
+      selector: {
+        select: { mode: "dropdown", options: HEIGHT_MODES.map((value) => ({ value, label: text2(`editor.height_mode_${value}`) })) }
+      }
+    },
+    ...mode === "fixed" ? [field("height")] : mode === "max" ? [field("max_height")] : []
+  ];
+}
+function heightData(config) {
+  return { ...config, height_mode: heightMode(config) };
+}
+function tidyHeight(config) {
+  const tidied = { ...config };
+  for (const key of ["height", "max_height"]) {
+    if (!tidied[key]) {
+      delete tidied[key];
+    }
+  }
+  if (!tidied.height_mode || heightMode({ ...tidied, height_mode: void 0 }) === tidied.height_mode) {
+    delete tidied.height_mode;
+  }
+  return tidied;
+}
+
 // src/localize/languages/en.json
 var en_default = {
   common: {
@@ -767,6 +831,7 @@ var en_default = {
     description: "What's Up Docker's container updates, grouped by compose project",
     title: "Docker containers",
     invalid_configuration: "Invalid configuration",
+    invalid_height: "Invalid height. height and max_height must be positive numbers of pixels, and height_mode auto, fixed or max.",
     no_entities: "No What's Up Docker update entities found",
     all_current: "All up to date",
     available: "Updates available",
@@ -807,8 +872,15 @@ var en_default = {
     entities_helper: "If you set update entities by hand, only they are shown.",
     exclude: "Leave out",
     exclude_helper: "Update entities never shown. For when you want to show everything from a device except these.",
-    height: "Height",
-    height_helper: "The card's height in pixels. If not set, the card's height adapts to its content."
+    height_mode: "Height",
+    height_mode_helper: "A height set in the layout tab of a sections view is used instead.",
+    height_mode_auto: "Fits the content",
+    height_mode_fixed: "Fixed",
+    height_mode_max: "Grows up to a limit",
+    height: "Fixed height",
+    height_helper: "The card is always this tall, and the open list scrolls inside it.",
+    max_height: "Maximum height",
+    max_height_helper: "The card grows with its content up to this height, and then the open list scrolls."
   }
 };
 
@@ -819,6 +891,7 @@ var fi_default = {
     description: "What's Up Dockerin konttip\xE4ivitykset compose-projekteittain",
     title: "Docker-kontit",
     invalid_configuration: "Virheelliset asetukset",
+    invalid_height: "Virheellinen korkeus. Korkeuksien (height ja max_height) on oltava positiivisia lukuja pikselein\xE4, ja korkeustilan (height_mode) auto, fixed tai max.",
     no_entities: "What's Up Dockerin p\xE4ivitysentiteettej\xE4 ei l\xF6ytynyt",
     all_current: "Kaikki ajan tasalla",
     available: "P\xE4ivityksi\xE4 saatavilla",
@@ -859,8 +932,15 @@ var fi_default = {
     entities_helper: "Jos asetat k\xE4sin p\xE4ivitysentiteettej\xE4, ainoastaan ne n\xE4ytet\xE4\xE4n.",
     exclude: "J\xE4t\xE4 pois",
     exclude_helper: "P\xE4ivitysentiteetit, joita ei koskaan n\xE4ytet\xE4. Kun haluat n\xE4ytt\xE4\xE4 laitteelta kaiken, paitsi n\xE4m\xE4.",
-    height: "Korkeus",
-    height_helper: "Kortin korkeus pikselein\xE4. Jos ei asetettu, kortin korkeus mukautuu sis\xE4lt\xF6\xF6n."
+    height_mode: "Korkeus",
+    height_mode_helper: "Osioihin jaetun n\xE4kym\xE4n asettelu-v\xE4lilehdell\xE4 asetettu korkeus ohittaa t\xE4m\xE4n.",
+    height_mode_auto: "Sis\xE4ll\xF6n mukaan",
+    height_mode_fixed: "Kiinte\xE4",
+    height_mode_max: "Kasvaa rajaan asti",
+    height: "Kiinte\xE4 korkeus",
+    height_helper: "Kortti on aina n\xE4in korkea, ja auki oleva lista vierii sen sis\xE4ll\xE4.",
+    max_height: "Enimm\xE4iskorkeus",
+    max_height_helper: "Kortti kasvaa sis\xE4lt\xF6ns\xE4 mukana t\xE4h\xE4n korkeuteen asti, ja sen j\xE4lkeen auki oleva lista vierii."
   }
 };
 
@@ -889,7 +969,7 @@ function browserLanguage() {
 }
 
 // src/editor.ts
-function schema(hass) {
+function schema(hass, config, text2) {
   const entities = wudEntities(hass);
   return [
     { name: "title", selector: { text: {} } },
@@ -900,10 +980,7 @@ function schema(hass) {
     },
     { name: "entities", selector: { entity: { multiple: true, include_entities: entities } } },
     { name: "exclude", selector: { entity: { multiple: true, include_entities: entities } } },
-    {
-      name: "height",
-      selector: { number: { min: 100, max: 1200, step: 10, unit_of_measurement: "px", mode: "box" } }
-    }
+    ...heightSchema(config, text2)
   ];
 }
 var WudQueueCardEditor = class extends i4 {
@@ -921,8 +998,8 @@ var WudQueueCardEditor = class extends i4 {
     return b2`
             <ha-form
                 .hass=${this.hass}
-                .data=${this.config}
-                .schema=${schema(this.hass)}
+                .data=${heightData(this.config)}
+                .schema=${schema(this.hass, this.config, (key) => this.text(key))}
                 .computeLabel=${(entry) => this.text(`editor.${entry.name}`)}
                 .computeHelper=${(entry) => this.helper(entry.name)}
                 @value-changed=${this.valueChanged}
@@ -930,8 +1007,8 @@ var WudQueueCardEditor = class extends i4 {
         `;
   }
   valueChanged(event) {
-    const config = { ...event.detail.value };
-    for (const key of ["title", "device", "entities", "exclude", "height"]) {
+    const config = tidyHeight(event.detail.value);
+    for (const key of ["title", "device", "entities", "exclude"]) {
       const value = config[key];
       if (value === void 0 || value === null || String(value) === "" || Array.isArray(value) && value.length === 0) {
         delete config[key];
@@ -961,6 +1038,104 @@ WudQueueCardEditor = __decorateClass([
   t3("wud-queue-card-editor")
 ], WudQueueCardEditor);
 
+// src/fade.ts
+var fadeStyles = i`
+    .fades {
+        --fade-length: min(24px, 25%);
+        scroll-padding-block: calc(var(--fade-top-offset, 0px) + var(--fade-length, 24px)) var(--fade-length, 24px);
+    }
+
+    .fade-top {
+        mask-image: linear-gradient(
+            to bottom,
+            #000 var(--fade-top-offset, 0px),
+            transparent var(--fade-top-offset, 0px),
+            #000 calc(var(--fade-top-offset, 0px) + var(--fade-length, 24px))
+        );
+    }
+
+    .fade-bottom {
+        mask-image: linear-gradient(to top, transparent, #000 var(--fade-length, 24px));
+    }
+
+    .fade-top.fade-bottom {
+        mask-image: linear-gradient(
+            to bottom,
+            #000 var(--fade-top-offset, 0px),
+            transparent var(--fade-top-offset, 0px),
+            #000 calc(var(--fade-top-offset, 0px) + var(--fade-length, 24px)),
+            #000 calc(100% - var(--fade-length, 24px)),
+            transparent
+        );
+    }
+`;
+function markFade(part) {
+  const hidden = part.scrollHeight - part.clientHeight;
+  part.classList.toggle("fade-top", hidden > 1 && part.scrollTop > 1);
+  part.classList.toggle("fade-bottom", hidden > 1 && hidden - part.scrollTop > 1);
+}
+var onScroll = (event) => markFade(event.currentTarget);
+var ScrollFade = class {
+  constructor(host, parts) {
+    this.host = host;
+    this.parts = parts;
+    /** Each followed part with the children whose size it watches. */
+    this.followed = /* @__PURE__ */ new Map();
+    this.resized = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver((entries) => {
+      for (const { target } of entries) {
+        const part = this.followed.has(target) ? target : target.parentElement;
+        if (part && this.followed.has(part)) {
+          markFade(part);
+        }
+      }
+    });
+    host.addController(this);
+  }
+  hostConnected() {
+    if (this.host.hasUpdated) {
+      this.follow();
+    }
+  }
+  hostUpdated() {
+    if (this.host.isConnected) {
+      this.follow();
+    }
+  }
+  hostDisconnected() {
+    for (const part of [...this.followed.keys()]) {
+      this.forget(part);
+    }
+  }
+  follow() {
+    const now = new Set(this.parts());
+    for (const part of [...this.followed.keys()]) {
+      if (!now.has(part)) {
+        this.forget(part);
+      }
+    }
+    for (const part of now) {
+      if (!this.followed.has(part)) {
+        part.addEventListener("scroll", onScroll, { passive: true });
+        this.resized?.observe(part);
+      }
+      part.classList.add("fades");
+      const before = this.followed.get(part) ?? [];
+      const children = [...part.children];
+      before.filter((child) => !children.includes(child)).forEach((child) => this.resized?.unobserve(child));
+      children.filter((child) => !before.includes(child)).forEach((child) => this.resized?.observe(child));
+      this.followed.set(part, children);
+      markFade(part);
+    }
+  }
+  forget(part) {
+    this.followed.get(part)?.forEach((child) => this.resized?.unobserve(child));
+    this.followed.delete(part);
+    part.removeEventListener("scroll", onScroll);
+    this.resized?.unobserve(part);
+    part.classList.remove("fades", "fade-top", "fade-bottom");
+  }
+};
+
 // src/wud-queue-card.ts
 console.info(
   `%c  WUD-QUEUE-CARD 
@@ -982,7 +1157,7 @@ function running(unit, followed) {
 }
 var WudQueueCard = class extends i4 {
   constructor() {
-    super(...arguments);
+    super();
     this.installs = /* @__PURE__ */ new Map();
     this.now = Date.now();
     /** Each container as last seen with a usable entity, for while WUD recreates it. */
@@ -999,6 +1174,7 @@ var WudQueueCard = class extends i4 {
         this.sliding = false;
       }
     };
+    new ScrollFade(this, () => this.heightStyle() ? this.renderRoot.querySelectorAll(".fold.open .scroll") : []);
   }
   static getConfigElement() {
     return document.createElement("wud-queue-card-editor");
@@ -1019,17 +1195,35 @@ var WudQueueCard = class extends i4 {
     if (!config) {
       throw new Error(translate(browserLanguage(), "common.invalid_configuration"));
     }
-    this.config = { ...config, entities: list(config.entities), exclude: list(config.exclude) };
+    const entities = list(config.entities);
+    const exclude = list(config.exclude);
+    if (!validHeight(config)) {
+      throw new Error(translate(browserLanguage(), "common.invalid_height"));
+    }
+    this.config = { ...config, entities, exclude };
   }
   getCardSize() {
-    return 2 + Math.min(
-      this.projects().flatMap((p3) => p3.units).filter((u3) => u3.pending).length,
-      6
-    );
+    const pending = this.projects().flatMap((p3) => p3.units).filter((u3) => u3.pending).length;
+    return heightCardSize(this.config ?? {}, 2 + Math.min(pending, 6), this.minimumHeight());
   }
   // No max_columns: a long version or digest has room to stay on one line in a wide card.
   getGridOptions() {
-    return { columns: 12, min_columns: 6, rows: "auto" };
+    return { columns: 12, min_columns: 6, rows: "auto", min_rows: gridMinRows(this.minimumHeight()) };
+  }
+  /**
+   * Held to a height, the title with its button, the status line, the progress bar, both section lines and one
+   * waiting row still fit, as measured on a full section's width. The configuration changes none of them.
+   */
+  minimumHeight() {
+    const header = 41;
+    const status = 18;
+    const progress = 12;
+    const sectionLines = 6 + 2 * 38;
+    const row = 46 + 4;
+    return header + status + progress + sectionLines + row;
+  }
+  heightStyle() {
+    return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
   }
   connectedCallback() {
     super.connectedCallback();
@@ -1040,6 +1234,7 @@ var WudQueueCard = class extends i4 {
     window.clearInterval(this.timer);
     this.timer = void 0;
     window.clearTimeout(this.slideTimer);
+    this.sliding = false;
   }
   shouldUpdate(changed) {
     if (!this.config || !changed.has("hass") || changed.size > 1) {
@@ -1115,7 +1310,7 @@ var WudQueueCard = class extends i4 {
     const projects = this.projectList;
     const title = this.config.title ?? this.text("common.title");
     if (projects.length === 0) {
-      return b2`<ha-card>
+      return b2`<ha-card style=${this.heightStyle()}>
                 <div class="hd"><div class="hd-title">${title}</div></div>
                 <div class="message">${this.text("common.no_entities")}</div>
             </ha-card>`;
@@ -1129,9 +1324,8 @@ var WudQueueCard = class extends i4 {
     const currentCount = currentProjects.reduce((n5, p3) => n5 + p3.units.length, 0);
     const open = this.open === "current" ? "current" : pendingUnits.length > 0 ? "pending" : "none";
     const busy = queueEntityId(this.hass) !== void 0 ? !queue || queue.stopping || this.acting : pendingUnits.some((u3) => running(u3, followed));
-    const height = this.config.height ? `height:${this.config.height}px` : "";
     return b2`
-            <ha-card style=${height} class=${this.sliding ? "sliding" : ""}>
+            <ha-card style=${this.heightStyle()} class=${this.sliding ? "sliding" : ""}>
                 <div class="hd">
                     <div class="hd-title">${title}</div>
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : A}
@@ -1437,446 +1631,465 @@ var WudQueueCard = class extends i4 {
     return this.hass?.locale?.language ?? this.hass?.language ?? browserLanguage();
   }
   static get styles() {
-    return i`
-            /*
+    return [
+      i`
+                /*
              * A column, so that with a height of its own, given in the options or by the dashboard's grid, the
              * title and the section lines keep their place and the open section scrolls in what is left.
              */
-            ha-card {
-                height: 100%;
-                box-sizing: border-box;
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-                container-type: inline-size;
-                --wq-soft: rgba(var(--rgb-primary-color, 3, 169, 244), 0.12);
-                --wq-track: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
-            }
-
-            .hd {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 12px 12px 0 16px;
-            }
-
-            /* The card's one call to action, so it looks like one on any theme. */
-            .action {
-                flex: none;
-                font: inherit;
-                font-size: 12.5px;
-                font-weight: 500;
-                color: var(--text-primary-color, #fff);
-                background: var(--primary-color);
-                border: 0;
-                border-radius: 16px;
-                padding: 5px 12px;
-                cursor: pointer;
-            }
-
-            .action:disabled {
-                opacity: 0.5;
-                cursor: default;
-            }
-
-            .action:focus-visible {
-                outline: 2px solid var(--primary-color);
-                outline-offset: 2px;
-            }
-
-            .bar {
-                display: flex;
-                gap: 3px;
-                margin: 8px 16px 0;
-            }
-
-            /* Waiting and not run: a grey that shows on light and dark themes alike. */
-            .seg {
-                flex: 1 1 0;
-                height: 4px;
-                border-radius: 2px;
-                background: color-mix(in srgb, var(--secondary-text-color) 35%, transparent);
-            }
-
-            .seg.running {
-                background: var(--primary-color);
-                opacity: 0.6;
-            }
-
-            .seg.done {
-                background: var(--success-color, #43a047);
-            }
-
-            .seg.failed {
-                background: var(--error-color, #db4437);
-            }
-
-            .hd-title {
-                flex: 1 1 auto;
-                min-width: 0;
-                font-size: var(--ha-card-header-font-size, 18px);
-                line-height: 1.4;
-            }
-
-            /* The status line reads the same in every state, in the text colour. The rows show the colours. */
-            .hd-sub {
-                padding: 0 16px;
-                font-size: 12px;
-                color: var(--primary-text-color);
-            }
-
-            .message {
-                padding: 4px 16px 14px;
-                font-size: 12px;
-                color: var(--secondary-text-color);
-            }
-
-            .list {
-                flex: 1 1 auto;
-                min-height: 0;
-                display: flex;
-                flex-direction: column;
-                padding-top: 6px;
-            }
-
-            .list > * {
-                flex: none;
-            }
-
-            .list > .fold.open {
-                flex: 1 1 auto;
-                min-height: 0;
-            }
-
-            .scroll {
-                height: 100%;
-                box-sizing: border-box;
-                overflow-y: auto;
-                overscroll-behavior: contain;
-                scrollbar-width: thin;
-                padding-bottom: 4px;
-            }
-
-            .sliding .scroll {
-                overflow-y: hidden;
-            }
-
-            .row {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 3px 12px 3px 16px;
-                min-height: 40px;
-                cursor: pointer;
-            }
-
-            .ico {
-                flex: 0 0 28px;
-                --mdc-icon-size: 20px;
-                display: flex;
-                justify-content: center;
-                color: var(--secondary-text-color);
-            }
-
-            .ico.running {
-                color: var(--primary-color);
-                animation: spin 1.4s linear infinite;
-            }
-
-            .ico.done {
-                color: var(--success-color, #43a047);
-            }
-
-            .ico.failed {
-                color: var(--error-color, #db4437);
-            }
-
-            @keyframes spin {
-                to {
-                    transform: rotate(360deg);
+                ha-card {
+                    box-sizing: border-box;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    container-type: inline-size;
+                    --wq-soft: rgba(var(--rgb-primary-color, 3, 169, 244), 0.12);
+                    --wq-track: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
                 }
-            }
 
-            .info {
-                flex: 1 1 auto;
-                min-width: 0;
-            }
+                .hd {
+                    flex: none;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 12px 12px 0 16px;
+                }
 
-            /* Names and versions wrap rather than being cut, digests and long build tags included. */
-            .name,
-            .sub,
-            .ver {
-                line-height: 1.3;
-                overflow-wrap: anywhere;
-            }
+                /* The card's one call to action, so it looks like one on any theme. */
+                .action {
+                    flex: none;
+                    font: inherit;
+                    font-size: 12.5px;
+                    font-weight: 500;
+                    color: var(--text-primary-color, #fff);
+                    background: var(--primary-color);
+                    border: 0;
+                    border-radius: 16px;
+                    padding: 5px 12px;
+                    cursor: pointer;
+                }
 
-            .name {
-                font-size: 14px;
-            }
+                .action:disabled {
+                    opacity: 0.5;
+                    cursor: default;
+                }
 
-            .sub {
-                font-size: 11.5px;
-                color: var(--secondary-text-color);
-            }
+                .action:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: 2px;
+                }
 
-            .ver {
-                font-family: var(--ha-font-family-code, ui-monospace, monospace);
-                font-size: 11.5px;
-            }
+                .bar {
+                    flex: none;
+                    display: flex;
+                    gap: 3px;
+                    margin: 8px 16px 0;
+                }
 
-            .ver .new {
-                color: var(--primary-color);
-                font-weight: 500;
-            }
+                /* Waiting and not run: a grey that shows on light and dark themes alike. */
+                .seg {
+                    flex: 1 1 0;
+                    height: 4px;
+                    border-radius: 2px;
+                    background: color-mix(in srgb, var(--secondary-text-color) 35%, transparent);
+                }
 
-            /* Never squeezed below its pill or button. A long version wraps within its half of the row instead. */
-            .end {
-                flex: none;
-                max-width: 50%;
-                text-align: right;
-                display: flex;
-                align-items: center;
-                color: var(--secondary-text-color);
-            }
+                .seg.running {
+                    background: var(--primary-color);
+                    opacity: 0.6;
+                }
 
-            .muted {
-                opacity: 0.62;
-            }
+                .seg.done {
+                    background: var(--success-color, #43a047);
+                }
 
-            .count {
-                font-size: 11px;
-                color: var(--secondary-text-color);
-                background: var(--wq-track);
-                border-radius: 8px;
-                padding: 0 6px;
-                margin-left: 6px;
-                vertical-align: 1px;
-                white-space: nowrap;
-            }
+                .seg.failed {
+                    background: var(--error-color, #db4437);
+                }
 
-            .install {
-                flex: none;
-                width: 30px;
-                height: 30px;
-                border-radius: 50%;
-                border: 0;
-                padding: 0;
-                background: color-mix(in srgb, var(--primary-color) 30%, transparent);
-                color: var(--primary-text-color);
-                display: grid;
-                place-items: center;
-                cursor: pointer;
-                --mdc-icon-size: 17px;
-            }
+                .hd-title {
+                    flex: 1 1 auto;
+                    min-width: 0;
+                    font-size: var(--ha-card-header-font-size, 18px);
+                    line-height: 1.4;
+                }
 
-            .install:disabled {
-                opacity: 0.35;
-                cursor: default;
-            }
+                /* The status line reads the same in every state, in the text colour. The rows show the colours. */
+                .hd-sub {
+                    flex: none;
+                    padding: 0 16px;
+                    font-size: 12px;
+                    color: var(--primary-text-color);
+                }
 
-            .install:focus-visible,
-            .switch:focus-visible {
-                outline: 2px solid var(--primary-color);
-                outline-offset: 2px;
-            }
+                .message {
+                    padding: 4px 16px 14px;
+                    font-size: 12px;
+                    color: var(--secondary-text-color);
+                }
 
-            .pill {
-                font-size: 11px;
-                font-weight: 500;
-                border-radius: 10px;
-                padding: 1px 8px;
-                white-space: nowrap;
-            }
+                .list {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    display: flex;
+                    flex-direction: column;
+                    padding-top: 6px;
+                }
 
-            .pill.running {
-                background: var(--wq-soft);
-                color: var(--primary-color);
-            }
+                .list > * {
+                    flex: none;
+                }
 
-            .pill.queued,
-            .pill.not_run {
-                background: var(--wq-track);
-                color: var(--secondary-text-color);
-            }
+                .list > .fold.open {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                }
 
-            .pill.done {
-                background: rgba(var(--rgb-success-color, 67, 160, 71), 0.12);
-                color: var(--success-color, #43a047);
-            }
+                .scroll {
+                    height: 100%;
+                    box-sizing: border-box;
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
+                    scrollbar-width: thin;
+                    padding-bottom: 4px;
+                }
 
-            .pill.failed {
-                background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
-                color: var(--error-color, #db4437);
-            }
+                .sliding .scroll {
+                    overflow-y: hidden;
+                }
 
-            .errline {
-                margin: 0 12px 6px 54px;
-                padding: 6px 9px;
-                border-radius: 8px;
-                font-size: 12px;
-                color: var(--error-color, #db4437);
-                background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
-            }
-
-            /* A compose project with several rows: a small label, then its rows along a guide line. */
-            .proj {
-                margin-top: 2px;
-            }
-
-            .row.proj-head {
-                min-height: 30px;
-                cursor: default;
-            }
-
-            .proj-body {
-                margin-left: 29px;
-                border-left: 2px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-            }
-
-            .proj-body .row {
-                padding-left: 10px;
-            }
-
-            .proj-body .errline {
-                margin-left: 48px;
-            }
-
-            .row.sib,
-            .current .row,
-            .current .row.proj-head {
-                min-height: 26px;
-                padding-top: 1px;
-                padding-bottom: 1px;
-            }
-
-            /* A thin row that can't fit its name and version side by side puts the version under the name. */
-            .row.sib,
-            .current .row:not(.proj-head) {
-                flex-wrap: wrap;
-                row-gap: 0;
-            }
-
-            .row.sib .info,
-            .current .row .info {
-                flex: 1 0 auto;
-                max-width: 100%;
-            }
-
-            .row.sib .end,
-            .current .row .end {
-                margin-left: auto;
-                max-width: 100%;
-            }
-
-            .row.sib .ico,
-            .current .ico {
-                --mdc-icon-size: 16px;
-            }
-
-            .row.sib .name,
-            .current .name {
-                font-size: 13px;
-            }
-
-            .fold {
-                display: grid;
-                grid-template-rows: 0fr;
-                transition: grid-template-rows var(--ha-animation-duration-normal, 250ms) ease;
-            }
-
-            .fold.open {
-                grid-template-rows: 1fr;
-            }
-
-            .fold-in {
-                min-height: 0;
-                overflow: hidden;
-            }
-
-            .switch {
-                box-sizing: border-box;
-                width: 100%;
-                font: inherit;
-                font-size: 12.5px;
-                color: var(--secondary-text-color);
-                background: none;
-                border: 0;
-                border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-                padding: 9px 16px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 8px;
-                text-align: left;
-            }
-
-            /* A narrow card gives the rows the room its indents would take. */
-            @container (max-width: 300px) {
-                .hd,
                 .row {
-                    padding-left: 10px;
-                    gap: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 3px 12px 3px 16px;
+                    min-height: 40px;
+                    cursor: pointer;
                 }
 
-                .hd-sub,
-                .message,
-                .switch {
-                    padding-left: 10px;
-                    padding-right: 10px;
+                .ico {
+                    flex: 0 0 28px;
+                    --mdc-icon-size: 20px;
+                    display: flex;
+                    justify-content: center;
+                    color: var(--secondary-text-color);
+                }
+
+                .ico.running {
+                    color: var(--primary-color);
+                    animation: spin 1.4s linear infinite;
+                }
+
+                .ico.done {
+                    color: var(--success-color, #43a047);
+                }
+
+                .ico.failed {
+                    color: var(--error-color, #db4437);
+                }
+
+                @keyframes spin {
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+
+                .info {
+                    flex: 1 1 auto;
+                    min-width: 0;
+                }
+
+                /* Names and versions wrap rather than being cut, digests and long build tags included. */
+                .name,
+                .sub,
+                .ver {
+                    line-height: 1.3;
+                    overflow-wrap: anywhere;
+                }
+
+                .name {
+                    font-size: 14px;
+                }
+
+                .sub {
+                    font-size: 11.5px;
+                    color: var(--secondary-text-color);
+                }
+
+                .ver {
+                    font-family: var(--ha-font-family-code, ui-monospace, monospace);
+                    font-size: 11.5px;
+                }
+
+                .ver .new {
+                    color: var(--primary-color);
+                    font-weight: 500;
+                }
+
+                /* Never squeezed below its pill or button. A long version wraps within its half of the row instead. */
+                .end {
+                    flex: none;
+                    max-width: 50%;
+                    text-align: right;
+                    display: flex;
+                    align-items: center;
+                    color: var(--secondary-text-color);
+                }
+
+                .muted {
+                    opacity: 0.62;
+                }
+
+                .count {
+                    font-size: 11px;
+                    color: var(--secondary-text-color);
+                    background: var(--wq-track);
+                    border-radius: 8px;
+                    padding: 0 6px;
+                    margin-left: 6px;
+                    vertical-align: 1px;
+                    white-space: nowrap;
+                }
+
+                .install {
+                    flex: none;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    border: 0;
+                    padding: 0;
+                    background: color-mix(in srgb, var(--primary-color) 30%, transparent);
+                    color: var(--primary-text-color);
+                    display: grid;
+                    place-items: center;
+                    cursor: pointer;
+                    --mdc-icon-size: 17px;
+                }
+
+                .install:disabled {
+                    opacity: 0.35;
+                    cursor: default;
+                }
+
+                /* Inside its edges, so the scrolling section doesn't clip it at the card's sides. */
+                .row:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: -2px;
+                }
+
+                .install:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: 2px;
+                }
+
+                /* Inside the line, as the card clips what is drawn outside it and the line is as wide as the card. */
+                .switch:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: -2px;
+                }
+
+                .pill {
+                    font-size: 11px;
+                    font-weight: 500;
+                    border-radius: 10px;
+                    padding: 1px 8px;
+                    white-space: nowrap;
+                }
+
+                .pill.running {
+                    background: var(--wq-soft);
+                    color: var(--primary-color);
+                }
+
+                .pill.queued,
+                .pill.not_run {
+                    background: var(--wq-track);
+                    color: var(--secondary-text-color);
+                }
+
+                .pill.done {
+                    background: rgba(var(--rgb-success-color, 67, 160, 71), 0.12);
+                    color: var(--success-color, #43a047);
+                }
+
+                .pill.failed {
+                    background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
+                    color: var(--error-color, #db4437);
+                }
+
+                .errline {
+                    margin: 0 12px 6px 54px;
+                    padding: 6px 9px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    color: var(--error-color, #db4437);
+                    background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
+                }
+
+                /* A compose project with several rows: a small label, then its rows along a guide line. */
+                .proj {
+                    margin-top: 2px;
+                }
+
+                .row.proj-head {
+                    min-height: 30px;
+                    cursor: default;
                 }
 
                 .proj-body {
-                    margin-left: 22px;
+                    margin-left: 29px;
+                    border-left: 2px solid var(--divider-color, rgba(0, 0, 0, 0.12));
                 }
 
                 .proj-body .row {
-                    padding-left: 6px;
+                    padding-left: 10px;
                 }
 
-                .errline,
                 .proj-body .errline {
-                    margin-left: 10px;
-                }
-            }
-
-            button.switch {
-                cursor: pointer;
-            }
-
-            /* A wide card has room for a waiting row's versions beside its name, next to the button. */
-            @container (min-width: 600px) {
-                .row:not(.sib, .proj-head) .info {
-                    display: flex;
-                    align-items: baseline;
-                    justify-content: space-between;
-                    gap: 16px;
+                    margin-left: 48px;
                 }
 
-                .row:not(.sib, .proj-head) .sub {
-                    text-align: right;
+                .row.sib,
+                .current .row,
+                .current .row.proj-head {
+                    min-height: 26px;
+                    padding-top: 1px;
+                    padding-bottom: 1px;
                 }
 
-                /* Up-to-date siblings line their version up with the waiting rows', left of the buttons. */
-                .row.sib .end {
-                    margin-right: 40px;
+                /* A thin row that can't fit its name and version side by side puts the version under the name. */
+                .row.sib,
+                .current .row:not(.proj-head) {
+                    flex-wrap: wrap;
+                    row-gap: 0;
                 }
-            }
 
-            @media (prefers-reduced-motion: reduce) {
-                .ico.running {
-                    animation: none;
+                .row.sib .info,
+                .current .row .info {
+                    flex: 1 0 auto;
+                    max-width: 100%;
+                }
+
+                .row.sib .end,
+                .current .row .end {
+                    margin-left: auto;
+                    max-width: 100%;
+                }
+
+                .row.sib .ico,
+                .current .ico {
+                    --mdc-icon-size: 16px;
+                }
+
+                .row.sib .name,
+                .current .name {
+                    font-size: 13px;
                 }
 
                 .fold {
-                    transition: none;
+                    display: grid;
+                    grid-template-rows: 0fr;
+                    transition: grid-template-rows var(--ha-animation-duration-normal, 250ms) ease;
                 }
-            }
-        `;
+
+                .fold.open {
+                    grid-template-rows: 1fr;
+                }
+
+                .fold-in {
+                    min-height: 0;
+                    overflow: hidden;
+                }
+
+                .switch {
+                    box-sizing: border-box;
+                    width: 100%;
+                    font: inherit;
+                    font-size: 12.5px;
+                    color: var(--secondary-text-color);
+                    background: none;
+                    border: 0;
+                    border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+                    padding: 9px 16px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 8px;
+                    text-align: left;
+                }
+
+                /* A narrow card gives the rows the room its indents would take. */
+                @container (max-width: 300px) {
+                    .hd,
+                    .row {
+                        padding-left: 10px;
+                        gap: 8px;
+                    }
+
+                    .hd-sub,
+                    .message,
+                    .switch {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                    }
+
+                    .proj-body {
+                        margin-left: 22px;
+                    }
+
+                    .proj-body .row {
+                        padding-left: 6px;
+                    }
+
+                    .errline,
+                    .proj-body .errline {
+                        margin-left: 10px;
+                    }
+                }
+
+                button.switch {
+                    cursor: pointer;
+                }
+
+                /* A wide card has room for a waiting row's versions beside its name, next to the button. */
+                @container (min-width: 600px) {
+                    .row:not(.sib, .proj-head) .info {
+                        display: flex;
+                        align-items: baseline;
+                        justify-content: space-between;
+                        gap: 16px;
+                    }
+
+                    .row:not(.sib, .proj-head) .sub {
+                        text-align: right;
+                    }
+
+                    /* Up-to-date siblings line their version up with the waiting rows', left of the buttons. */
+                    .row.sib .end {
+                        margin-right: 40px;
+                    }
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .ico.running {
+                        animation: none;
+                    }
+
+                    .fold {
+                        transition: none;
+                    }
+                }
+            `,
+      fadeStyles
+    ];
   }
 };
 __decorateClass([
   n4({ attribute: false })
 ], WudQueueCard.prototype, "hass", 2);
+__decorateClass([
+  n4({ attribute: false })
+], WudQueueCard.prototype, "layout", 2);
 __decorateClass([
   r5()
 ], WudQueueCard.prototype, "config", 2);

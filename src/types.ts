@@ -1,6 +1,7 @@
 import type { LovelaceCardConfig } from "./hass";
+import type { HeightConfig } from "./height";
 
-export interface WudQueueCardConfig extends LovelaceCardConfig {
+export interface WudQueueCardConfig extends LovelaceCardConfig, HeightConfig {
     /** Shown at the top of the card. Without one the card is titled in the viewer's language. */
     title?: string;
     /** Every WUD update entity of this device. Without `device` or `entities`, every WUD update entity there is. */
@@ -9,8 +10,6 @@ export interface WudQueueCardConfig extends LovelaceCardConfig {
     entities?: string[];
     /** Update entities left out, in either mode. */
     exclude?: string[];
-    /** The card's height in pixels. The open section scrolls in what the title and section lines leave. */
-    height?: number;
 }
 
 /** A container as the card shows it, read from WUD's update entity. */

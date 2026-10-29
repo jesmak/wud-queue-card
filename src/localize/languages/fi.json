@@ -4,6 +4,7 @@
         "description": "What's Up Dockerin konttipäivitykset compose-projekteittain",
         "title": "Docker-kontit",
         "invalid_configuration": "Virheelliset asetukset",
+        "invalid_height": "Virheellinen korkeus. Korkeuksien (height ja max_height) on oltava positiivisia lukuja pikseleinä, ja korkeustilan (height_mode) auto, fixed tai max.",
         "no_entities": "What's Up Dockerin päivitysentiteettejä ei löytynyt",
         "all_current": "Kaikki ajan tasalla",
         "available": "Päivityksiä saatavilla",
@@ -44,7 +45,14 @@
         "entities_helper": "Jos asetat käsin päivitysentiteettejä, ainoastaan ne näytetään.",
         "exclude": "Jätä pois",
         "exclude_helper": "Päivitysentiteetit, joita ei koskaan näytetä. Kun haluat näyttää laitteelta kaiken, paitsi nämä.",
-        "height": "Korkeus",
-        "height_helper": "Kortin korkeus pikseleinä. Jos ei asetettu, kortin korkeus mukautuu sisältöön."
+        "height_mode": "Korkeus",
+        "height_mode_helper": "Osioihin jaetun näkymän asettelu-välilehdellä asetettu korkeus ohittaa tämän.",
+        "height_mode_auto": "Sisällön mukaan",
+        "height_mode_fixed": "Kiinteä",
+        "height_mode_max": "Kasvaa rajaan asti",
+        "height": "Kiinteä korkeus",
+        "height_helper": "Kortti on aina näin korkea, ja auki oleva lista vierii sen sisällä.",
+        "max_height": "Enimmäiskorkeus",
+        "max_height_helper": "Kortti kasvaa sisältönsä mukana tähän korkeuteen asti, ja sen jälkeen auki oleva lista vierii."
     }
 }

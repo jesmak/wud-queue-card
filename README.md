@@ -76,14 +76,16 @@ version only at its next scheduled watch, and until then the card shows an insta
 
 ## Options
 
-| Name       | Type   | Default                       | Description                                                   |
-| ---------- | ------ | ----------------------------- | ------------------------------------------------------------- |
-| `type`     | string | required                      | `custom:wud-queue-card`                                       |
-| `title`    | string | Docker containers, translated | Shown at the top of the card                                  |
-| `device`   | string | every WUD update entity       | The id of a WUD device, whose update entities the card shows  |
-| `entities` | list   | found by the card             | The update entities to show, instead of the card finding them |
-| `exclude`  | list   |                               | Update entities never shown, whether found or listed          |
-| `height`   | number | fits the content              | The card's height in pixels. The open list scrolls inside it  |
+| Name          | Type   | Default                                                                         | Description                                                                                                                                                                                                                                      |
+| ------------- | ------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `type`        | string | required                                                                        | `custom:wud-queue-card`                                                                                                                                                                                                                          |
+| `title`       | string | Docker containers, translated                                                   | Shown at the top of the card                                                                                                                                                                                                                     |
+| `device`      | string | every WUD update entity                                                         | The id of a WUD device, whose update entities the card shows                                                                                                                                                                                     |
+| `entities`    | list   | found by the card                                                               | The update entities to show, instead of the card finding them                                                                                                                                                                                    |
+| `exclude`     | list   |                                                                                 | Update entities never shown, whether found or listed                                                                                                                                                                                             |
+| `height_mode` | string | `fixed` when `height` is set, `max` when only `max_height` is, otherwise `auto` | How tall the card is. `auto` fits its content, `fixed` keeps it at `height`, `max` lets it grow up to `max_height`. In `fixed` and `max` the open list scrolls. A height in grid rows, set in the layout tab of a sections view, is used instead |
+| `height`      | number |                                                                                 | The card's height in pixels, for `fixed`                                                                                                                                                                                                         |
+| `max_height`  | number |                                                                                 | The card's greatest height in pixels, for `max`                                                                                                                                                                                                  |
 
 Every option is in the visual editor. Without `device` or `entities`, the card shows every update entity WUD has
 made, from all its watchers. WUD makes a device per watcher, so `device` limits the card to one Docker host. The
@@ -166,9 +168,10 @@ versions sit beside its name, next to the install button.
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-light.png#gh-light-mode-only" width="250" alt="The queue on a card half a section wide, the long versions of a group of services wrapped under its name beside the Updating pill">
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-dark.png#gh-dark-mode-only" width="250" alt="The queue on a card half a section wide, the long versions of a group of services wrapped under its name beside the Updating pill">
 
-Set `height` to give the card a height of its own, so that a long list doesn't make it taller than the rest of the
-dashboard. The title and the section lines stay where they are, and the open list scrolls in what is left. The same
-happens when the card's rows are set in a sections view.
+Set `height`, or `max_height` for a card that grows only up to it, so that a long list doesn't make the card taller
+than the rest of the dashboard. The title, the status line, the progress bar and the section lines stay where they are, and the open
+list scrolls in what is left. The same happens when the card's rows are set in a sections view. The card never gets lower than those and
+one row of the open list need.
 
 ## Examples
 

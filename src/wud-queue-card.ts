@@ -28,7 +28,9 @@ import {
 } from "./containers";
 import type { Followed, Install } from "./containers";
 import "./editor";
+import { ScrollFade, fadeStyles } from "./fade";
 import type { HomeAssistant } from "./hass";
+import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
 import type { Container, Project, Queue, Unit, WudQueueCardConfig } from "./types";
 
@@ -66,6 +68,8 @@ function running(unit: Unit, followed: Map<string, Followed>): boolean {
 @customElement("wud-queue-card")
 export class WudQueueCard extends LitElement {
     @property({ attribute: false }) public hass?: HomeAssistant;
+    /** Set by the dashboard: "grid" in a sections view. */
+    @property({ attribute: false }) public layout?: string;
     @state() private config?: WudQueueCardConfig;
     /** The open section. Until one is chosen, the waiting updates are open when there are any. */
     @state() private open?: Section | "none";
@@ -86,6 +90,12 @@ export class WudQueueCard extends LitElement {
     private followed = new Map<string, Followed>();
     /** The projects to show, worked out once per update. */
     private projectList: Project[] = [];
+
+    constructor() {
+        super();
+        // Fades the open section's edges while the card is held to a height, through the card's own lifecycle.
+        new ScrollFade(this, () => (this.heightStyle() ? this.renderRoot.querySelectorAll<HTMLElement>(".fold.open .scroll") : []));
+    }
 
     public static getConfigElement(): HTMLElement {
         return document.createElement("wud-queue-card-editor");
@@ -109,24 +119,41 @@ export class WudQueueCard extends LitElement {
         if (!config) {
             throw new Error(translate(browserLanguage(), "common.invalid_configuration"));
         }
-        this.config = { ...config, entities: list(config.entities), exclude: list(config.exclude) };
+        const entities = list(config.entities);
+        const exclude = list(config.exclude);
+        if (!validHeight(config)) {
+            throw new Error(translate(browserLanguage(), "common.invalid_height"));
+        }
+        this.config = { ...config, entities, exclude };
     }
 
     public getCardSize(): number {
-        return (
-            2 +
-            Math.min(
-                this.projects()
-                    .flatMap((p) => p.units)
-                    .filter((u) => u.pending).length,
-                6,
-            )
-        );
+        const pending = this.projects()
+            .flatMap((p) => p.units)
+            .filter((u) => u.pending).length;
+        return heightCardSize(this.config ?? {}, 2 + Math.min(pending, 6), this.minimumHeight());
     }
 
     // No max_columns: a long version or digest has room to stay on one line in a wide card.
     public getGridOptions(): Record<string, unknown> {
-        return { columns: 12, min_columns: 6, rows: "auto" };
+        return { columns: 12, min_columns: 6, rows: "auto", min_rows: gridMinRows(this.minimumHeight()) };
+    }
+
+    /**
+     * Held to a height, the title with its button, the status line, the progress bar, both section lines and one
+     * waiting row still fit, as measured on a full section's width. The configuration changes none of them.
+     */
+    private minimumHeight(): number {
+        const header = 41;
+        const status = 18;
+        const progress = 12;
+        const sectionLines = 6 + 2 * 38;
+        const row = 46 + 4;
+        return header + status + progress + sectionLines + row;
+    }
+
+    private heightStyle(): string {
+        return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
     }
 
     public connectedCallback(): void {
@@ -139,7 +166,9 @@ export class WudQueueCard extends LitElement {
         super.disconnectedCallback();
         window.clearInterval(this.timer);
         this.timer = undefined;
+        // The timer that would have ended the slide is gone, so a card that comes back mustn't still think it slides.
         window.clearTimeout(this.slideTimer);
+        this.sliding = false;
     }
 
     protected shouldUpdate(changed: PropertyValues): boolean {
@@ -224,7 +253,7 @@ export class WudQueueCard extends LitElement {
         const projects = this.projectList;
         const title = this.config.title ?? this.text("common.title");
         if (projects.length === 0) {
-            return html`<ha-card>
+            return html`<ha-card style=${this.heightStyle()}>
                 <div class="hd"><div class="hd-title">${title}</div></div>
                 <div class="message">${this.text("common.no_entities")}</div>
             </ha-card>`;
@@ -245,10 +274,9 @@ export class WudQueueCard extends LitElement {
             queueEntityId(this.hass) !== undefined
                 ? !queue || queue.stopping || this.acting
                 : pendingUnits.some((u) => running(u, followed));
-        const height = this.config.height ? `height:${this.config.height}px` : "";
 
         return html`
-            <ha-card style=${height} class=${this.sliding ? "sliding" : ""}>
+            <ha-card style=${this.heightStyle()} class=${this.sliding ? "sliding" : ""}>
                 <div class="hd">
                     <div class="hd-title">${title}</div>
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : nothing}
@@ -643,441 +671,457 @@ export class WudQueueCard extends LitElement {
     }
 
     static get styles(): CSSResultGroup {
-        return css`
-            /*
+        return [
+            css`
+                /*
              * A column, so that with a height of its own, given in the options or by the dashboard's grid, the
              * title and the section lines keep their place and the open section scrolls in what is left.
              */
-            ha-card {
-                height: 100%;
-                box-sizing: border-box;
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-                container-type: inline-size;
-                --wq-soft: rgba(var(--rgb-primary-color, 3, 169, 244), 0.12);
-                --wq-track: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
-            }
-
-            .hd {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 12px 12px 0 16px;
-            }
-
-            /* The card's one call to action, so it looks like one on any theme. */
-            .action {
-                flex: none;
-                font: inherit;
-                font-size: 12.5px;
-                font-weight: 500;
-                color: var(--text-primary-color, #fff);
-                background: var(--primary-color);
-                border: 0;
-                border-radius: 16px;
-                padding: 5px 12px;
-                cursor: pointer;
-            }
-
-            .action:disabled {
-                opacity: 0.5;
-                cursor: default;
-            }
-
-            .action:focus-visible {
-                outline: 2px solid var(--primary-color);
-                outline-offset: 2px;
-            }
-
-            .bar {
-                display: flex;
-                gap: 3px;
-                margin: 8px 16px 0;
-            }
-
-            /* Waiting and not run: a grey that shows on light and dark themes alike. */
-            .seg {
-                flex: 1 1 0;
-                height: 4px;
-                border-radius: 2px;
-                background: color-mix(in srgb, var(--secondary-text-color) 35%, transparent);
-            }
-
-            .seg.running {
-                background: var(--primary-color);
-                opacity: 0.6;
-            }
-
-            .seg.done {
-                background: var(--success-color, #43a047);
-            }
-
-            .seg.failed {
-                background: var(--error-color, #db4437);
-            }
-
-            .hd-title {
-                flex: 1 1 auto;
-                min-width: 0;
-                font-size: var(--ha-card-header-font-size, 18px);
-                line-height: 1.4;
-            }
-
-            /* The status line reads the same in every state, in the text colour. The rows show the colours. */
-            .hd-sub {
-                padding: 0 16px;
-                font-size: 12px;
-                color: var(--primary-text-color);
-            }
-
-            .message {
-                padding: 4px 16px 14px;
-                font-size: 12px;
-                color: var(--secondary-text-color);
-            }
-
-            .list {
-                flex: 1 1 auto;
-                min-height: 0;
-                display: flex;
-                flex-direction: column;
-                padding-top: 6px;
-            }
-
-            .list > * {
-                flex: none;
-            }
-
-            .list > .fold.open {
-                flex: 1 1 auto;
-                min-height: 0;
-            }
-
-            .scroll {
-                height: 100%;
-                box-sizing: border-box;
-                overflow-y: auto;
-                overscroll-behavior: contain;
-                scrollbar-width: thin;
-                padding-bottom: 4px;
-            }
-
-            .sliding .scroll {
-                overflow-y: hidden;
-            }
-
-            .row {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 3px 12px 3px 16px;
-                min-height: 40px;
-                cursor: pointer;
-            }
-
-            .ico {
-                flex: 0 0 28px;
-                --mdc-icon-size: 20px;
-                display: flex;
-                justify-content: center;
-                color: var(--secondary-text-color);
-            }
-
-            .ico.running {
-                color: var(--primary-color);
-                animation: spin 1.4s linear infinite;
-            }
-
-            .ico.done {
-                color: var(--success-color, #43a047);
-            }
-
-            .ico.failed {
-                color: var(--error-color, #db4437);
-            }
-
-            @keyframes spin {
-                to {
-                    transform: rotate(360deg);
+                ha-card {
+                    box-sizing: border-box;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    container-type: inline-size;
+                    --wq-soft: rgba(var(--rgb-primary-color, 3, 169, 244), 0.12);
+                    --wq-track: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08);
                 }
-            }
 
-            .info {
-                flex: 1 1 auto;
-                min-width: 0;
-            }
+                .hd {
+                    flex: none;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 12px 12px 0 16px;
+                }
 
-            /* Names and versions wrap rather than being cut, digests and long build tags included. */
-            .name,
-            .sub,
-            .ver {
-                line-height: 1.3;
-                overflow-wrap: anywhere;
-            }
+                /* The card's one call to action, so it looks like one on any theme. */
+                .action {
+                    flex: none;
+                    font: inherit;
+                    font-size: 12.5px;
+                    font-weight: 500;
+                    color: var(--text-primary-color, #fff);
+                    background: var(--primary-color);
+                    border: 0;
+                    border-radius: 16px;
+                    padding: 5px 12px;
+                    cursor: pointer;
+                }
 
-            .name {
-                font-size: 14px;
-            }
+                .action:disabled {
+                    opacity: 0.5;
+                    cursor: default;
+                }
 
-            .sub {
-                font-size: 11.5px;
-                color: var(--secondary-text-color);
-            }
+                .action:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: 2px;
+                }
 
-            .ver {
-                font-family: var(--ha-font-family-code, ui-monospace, monospace);
-                font-size: 11.5px;
-            }
+                .bar {
+                    flex: none;
+                    display: flex;
+                    gap: 3px;
+                    margin: 8px 16px 0;
+                }
 
-            .ver .new {
-                color: var(--primary-color);
-                font-weight: 500;
-            }
+                /* Waiting and not run: a grey that shows on light and dark themes alike. */
+                .seg {
+                    flex: 1 1 0;
+                    height: 4px;
+                    border-radius: 2px;
+                    background: color-mix(in srgb, var(--secondary-text-color) 35%, transparent);
+                }
 
-            /* Never squeezed below its pill or button. A long version wraps within its half of the row instead. */
-            .end {
-                flex: none;
-                max-width: 50%;
-                text-align: right;
-                display: flex;
-                align-items: center;
-                color: var(--secondary-text-color);
-            }
+                .seg.running {
+                    background: var(--primary-color);
+                    opacity: 0.6;
+                }
 
-            .muted {
-                opacity: 0.62;
-            }
+                .seg.done {
+                    background: var(--success-color, #43a047);
+                }
 
-            .count {
-                font-size: 11px;
-                color: var(--secondary-text-color);
-                background: var(--wq-track);
-                border-radius: 8px;
-                padding: 0 6px;
-                margin-left: 6px;
-                vertical-align: 1px;
-                white-space: nowrap;
-            }
+                .seg.failed {
+                    background: var(--error-color, #db4437);
+                }
 
-            .install {
-                flex: none;
-                width: 30px;
-                height: 30px;
-                border-radius: 50%;
-                border: 0;
-                padding: 0;
-                background: color-mix(in srgb, var(--primary-color) 30%, transparent);
-                color: var(--primary-text-color);
-                display: grid;
-                place-items: center;
-                cursor: pointer;
-                --mdc-icon-size: 17px;
-            }
+                .hd-title {
+                    flex: 1 1 auto;
+                    min-width: 0;
+                    font-size: var(--ha-card-header-font-size, 18px);
+                    line-height: 1.4;
+                }
 
-            .install:disabled {
-                opacity: 0.35;
-                cursor: default;
-            }
+                /* The status line reads the same in every state, in the text colour. The rows show the colours. */
+                .hd-sub {
+                    flex: none;
+                    padding: 0 16px;
+                    font-size: 12px;
+                    color: var(--primary-text-color);
+                }
 
-            .install:focus-visible,
-            .switch:focus-visible {
-                outline: 2px solid var(--primary-color);
-                outline-offset: 2px;
-            }
+                .message {
+                    padding: 4px 16px 14px;
+                    font-size: 12px;
+                    color: var(--secondary-text-color);
+                }
 
-            .pill {
-                font-size: 11px;
-                font-weight: 500;
-                border-radius: 10px;
-                padding: 1px 8px;
-                white-space: nowrap;
-            }
+                .list {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    display: flex;
+                    flex-direction: column;
+                    padding-top: 6px;
+                }
 
-            .pill.running {
-                background: var(--wq-soft);
-                color: var(--primary-color);
-            }
+                .list > * {
+                    flex: none;
+                }
 
-            .pill.queued,
-            .pill.not_run {
-                background: var(--wq-track);
-                color: var(--secondary-text-color);
-            }
+                .list > .fold.open {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                }
 
-            .pill.done {
-                background: rgba(var(--rgb-success-color, 67, 160, 71), 0.12);
-                color: var(--success-color, #43a047);
-            }
+                .scroll {
+                    height: 100%;
+                    box-sizing: border-box;
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
+                    scrollbar-width: thin;
+                    padding-bottom: 4px;
+                }
 
-            .pill.failed {
-                background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
-                color: var(--error-color, #db4437);
-            }
+                .sliding .scroll {
+                    overflow-y: hidden;
+                }
 
-            .errline {
-                margin: 0 12px 6px 54px;
-                padding: 6px 9px;
-                border-radius: 8px;
-                font-size: 12px;
-                color: var(--error-color, #db4437);
-                background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
-            }
-
-            /* A compose project with several rows: a small label, then its rows along a guide line. */
-            .proj {
-                margin-top: 2px;
-            }
-
-            .row.proj-head {
-                min-height: 30px;
-                cursor: default;
-            }
-
-            .proj-body {
-                margin-left: 29px;
-                border-left: 2px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-            }
-
-            .proj-body .row {
-                padding-left: 10px;
-            }
-
-            .proj-body .errline {
-                margin-left: 48px;
-            }
-
-            .row.sib,
-            .current .row,
-            .current .row.proj-head {
-                min-height: 26px;
-                padding-top: 1px;
-                padding-bottom: 1px;
-            }
-
-            /* A thin row that can't fit its name and version side by side puts the version under the name. */
-            .row.sib,
-            .current .row:not(.proj-head) {
-                flex-wrap: wrap;
-                row-gap: 0;
-            }
-
-            .row.sib .info,
-            .current .row .info {
-                flex: 1 0 auto;
-                max-width: 100%;
-            }
-
-            .row.sib .end,
-            .current .row .end {
-                margin-left: auto;
-                max-width: 100%;
-            }
-
-            .row.sib .ico,
-            .current .ico {
-                --mdc-icon-size: 16px;
-            }
-
-            .row.sib .name,
-            .current .name {
-                font-size: 13px;
-            }
-
-            .fold {
-                display: grid;
-                grid-template-rows: 0fr;
-                transition: grid-template-rows var(--ha-animation-duration-normal, 250ms) ease;
-            }
-
-            .fold.open {
-                grid-template-rows: 1fr;
-            }
-
-            .fold-in {
-                min-height: 0;
-                overflow: hidden;
-            }
-
-            .switch {
-                box-sizing: border-box;
-                width: 100%;
-                font: inherit;
-                font-size: 12.5px;
-                color: var(--secondary-text-color);
-                background: none;
-                border: 0;
-                border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-                padding: 9px 16px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 8px;
-                text-align: left;
-            }
-
-            /* A narrow card gives the rows the room its indents would take. */
-            @container (max-width: 300px) {
-                .hd,
                 .row {
-                    padding-left: 10px;
-                    gap: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 3px 12px 3px 16px;
+                    min-height: 40px;
+                    cursor: pointer;
                 }
 
-                .hd-sub,
-                .message,
-                .switch {
-                    padding-left: 10px;
-                    padding-right: 10px;
+                .ico {
+                    flex: 0 0 28px;
+                    --mdc-icon-size: 20px;
+                    display: flex;
+                    justify-content: center;
+                    color: var(--secondary-text-color);
+                }
+
+                .ico.running {
+                    color: var(--primary-color);
+                    animation: spin 1.4s linear infinite;
+                }
+
+                .ico.done {
+                    color: var(--success-color, #43a047);
+                }
+
+                .ico.failed {
+                    color: var(--error-color, #db4437);
+                }
+
+                @keyframes spin {
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+
+                .info {
+                    flex: 1 1 auto;
+                    min-width: 0;
+                }
+
+                /* Names and versions wrap rather than being cut, digests and long build tags included. */
+                .name,
+                .sub,
+                .ver {
+                    line-height: 1.3;
+                    overflow-wrap: anywhere;
+                }
+
+                .name {
+                    font-size: 14px;
+                }
+
+                .sub {
+                    font-size: 11.5px;
+                    color: var(--secondary-text-color);
+                }
+
+                .ver {
+                    font-family: var(--ha-font-family-code, ui-monospace, monospace);
+                    font-size: 11.5px;
+                }
+
+                .ver .new {
+                    color: var(--primary-color);
+                    font-weight: 500;
+                }
+
+                /* Never squeezed below its pill or button. A long version wraps within its half of the row instead. */
+                .end {
+                    flex: none;
+                    max-width: 50%;
+                    text-align: right;
+                    display: flex;
+                    align-items: center;
+                    color: var(--secondary-text-color);
+                }
+
+                .muted {
+                    opacity: 0.62;
+                }
+
+                .count {
+                    font-size: 11px;
+                    color: var(--secondary-text-color);
+                    background: var(--wq-track);
+                    border-radius: 8px;
+                    padding: 0 6px;
+                    margin-left: 6px;
+                    vertical-align: 1px;
+                    white-space: nowrap;
+                }
+
+                .install {
+                    flex: none;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    border: 0;
+                    padding: 0;
+                    background: color-mix(in srgb, var(--primary-color) 30%, transparent);
+                    color: var(--primary-text-color);
+                    display: grid;
+                    place-items: center;
+                    cursor: pointer;
+                    --mdc-icon-size: 17px;
+                }
+
+                .install:disabled {
+                    opacity: 0.35;
+                    cursor: default;
+                }
+
+                /* Inside its edges, so the scrolling section doesn't clip it at the card's sides. */
+                .row:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: -2px;
+                }
+
+                .install:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: 2px;
+                }
+
+                /* Inside the line, as the card clips what is drawn outside it and the line is as wide as the card. */
+                .switch:focus-visible {
+                    outline: 2px solid var(--primary-color);
+                    outline-offset: -2px;
+                }
+
+                .pill {
+                    font-size: 11px;
+                    font-weight: 500;
+                    border-radius: 10px;
+                    padding: 1px 8px;
+                    white-space: nowrap;
+                }
+
+                .pill.running {
+                    background: var(--wq-soft);
+                    color: var(--primary-color);
+                }
+
+                .pill.queued,
+                .pill.not_run {
+                    background: var(--wq-track);
+                    color: var(--secondary-text-color);
+                }
+
+                .pill.done {
+                    background: rgba(var(--rgb-success-color, 67, 160, 71), 0.12);
+                    color: var(--success-color, #43a047);
+                }
+
+                .pill.failed {
+                    background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
+                    color: var(--error-color, #db4437);
+                }
+
+                .errline {
+                    margin: 0 12px 6px 54px;
+                    padding: 6px 9px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    color: var(--error-color, #db4437);
+                    background: rgba(var(--rgb-error-color, 219, 68, 55), 0.1);
+                }
+
+                /* A compose project with several rows: a small label, then its rows along a guide line. */
+                .proj {
+                    margin-top: 2px;
+                }
+
+                .row.proj-head {
+                    min-height: 30px;
+                    cursor: default;
                 }
 
                 .proj-body {
-                    margin-left: 22px;
+                    margin-left: 29px;
+                    border-left: 2px solid var(--divider-color, rgba(0, 0, 0, 0.12));
                 }
 
                 .proj-body .row {
-                    padding-left: 6px;
+                    padding-left: 10px;
                 }
 
-                .errline,
                 .proj-body .errline {
-                    margin-left: 10px;
-                }
-            }
-
-            button.switch {
-                cursor: pointer;
-            }
-
-            /* A wide card has room for a waiting row's versions beside its name, next to the button. */
-            @container (min-width: 600px) {
-                .row:not(.sib, .proj-head) .info {
-                    display: flex;
-                    align-items: baseline;
-                    justify-content: space-between;
-                    gap: 16px;
+                    margin-left: 48px;
                 }
 
-                .row:not(.sib, .proj-head) .sub {
-                    text-align: right;
+                .row.sib,
+                .current .row,
+                .current .row.proj-head {
+                    min-height: 26px;
+                    padding-top: 1px;
+                    padding-bottom: 1px;
                 }
 
-                /* Up-to-date siblings line their version up with the waiting rows', left of the buttons. */
-                .row.sib .end {
-                    margin-right: 40px;
+                /* A thin row that can't fit its name and version side by side puts the version under the name. */
+                .row.sib,
+                .current .row:not(.proj-head) {
+                    flex-wrap: wrap;
+                    row-gap: 0;
                 }
-            }
 
-            @media (prefers-reduced-motion: reduce) {
-                .ico.running {
-                    animation: none;
+                .row.sib .info,
+                .current .row .info {
+                    flex: 1 0 auto;
+                    max-width: 100%;
+                }
+
+                .row.sib .end,
+                .current .row .end {
+                    margin-left: auto;
+                    max-width: 100%;
+                }
+
+                .row.sib .ico,
+                .current .ico {
+                    --mdc-icon-size: 16px;
+                }
+
+                .row.sib .name,
+                .current .name {
+                    font-size: 13px;
                 }
 
                 .fold {
-                    transition: none;
+                    display: grid;
+                    grid-template-rows: 0fr;
+                    transition: grid-template-rows var(--ha-animation-duration-normal, 250ms) ease;
                 }
-            }
-        `;
+
+                .fold.open {
+                    grid-template-rows: 1fr;
+                }
+
+                .fold-in {
+                    min-height: 0;
+                    overflow: hidden;
+                }
+
+                .switch {
+                    box-sizing: border-box;
+                    width: 100%;
+                    font: inherit;
+                    font-size: 12.5px;
+                    color: var(--secondary-text-color);
+                    background: none;
+                    border: 0;
+                    border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+                    padding: 9px 16px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 8px;
+                    text-align: left;
+                }
+
+                /* A narrow card gives the rows the room its indents would take. */
+                @container (max-width: 300px) {
+                    .hd,
+                    .row {
+                        padding-left: 10px;
+                        gap: 8px;
+                    }
+
+                    .hd-sub,
+                    .message,
+                    .switch {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                    }
+
+                    .proj-body {
+                        margin-left: 22px;
+                    }
+
+                    .proj-body .row {
+                        padding-left: 6px;
+                    }
+
+                    .errline,
+                    .proj-body .errline {
+                        margin-left: 10px;
+                    }
+                }
+
+                button.switch {
+                    cursor: pointer;
+                }
+
+                /* A wide card has room for a waiting row's versions beside its name, next to the button. */
+                @container (min-width: 600px) {
+                    .row:not(.sib, .proj-head) .info {
+                        display: flex;
+                        align-items: baseline;
+                        justify-content: space-between;
+                        gap: 16px;
+                    }
+
+                    .row:not(.sib, .proj-head) .sub {
+                        text-align: right;
+                    }
+
+                    /* Up-to-date siblings line their version up with the waiting rows', left of the buttons. */
+                    .row.sib .end {
+                        margin-right: 40px;
+                    }
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .ico.running {
+                        animation: none;
+                    }
+
+                    .fold {
+                        transition: none;
+                    }
+                }
+            `,
+            fadeStyles,
+        ];
     }
 }
 

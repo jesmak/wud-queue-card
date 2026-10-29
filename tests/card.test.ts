@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DONE_KEEP, START_TIMEOUT } from "../src/const";
+import { browserLanguage, translate } from "../src/localize/localize";
 import "../src/wud-queue-card";
 import type { WudQueueCard } from "../src/wud-queue-card";
 import type { HassEntity, HomeAssistant } from "../src/hass";
 import type { Queue, QueueItem, WudQueueCardConfig } from "../src/types";
 import { entity, hass, sample } from "./fixtures";
 
-async function card(state: HomeAssistant, config: Partial<WudQueueCardConfig> = {}): Promise<WudQueueCard> {
+async function card(state: HomeAssistant, config: Partial<WudQueueCardConfig> = {}, layout?: string): Promise<WudQueueCard> {
     const element = document.createElement("wud-queue-card") as WudQueueCard;
+    element.layout = layout;
     element.setConfig({ type: "custom:wud-queue-card", ...config });
     element.hass = state;
     document.body.append(element);
@@ -162,9 +164,81 @@ describe("the two sections", () => {
         expect(names(root, ".current")).toEqual([]);
     });
 
-    it("take a fixed height from the options", async () => {
+    it.each([
+        ["its content", undefined, {}, ""],
+        ["a fixed height", undefined, { height: 300 }, "height: 300px"],
+        ["a maximum height", undefined, { max_height: 400 }, "max-height: 400px"],
+        ["grid rows in a sections view", "grid", { height: 300, grid_options: { rows: 6 } }, "height: 100%"],
+        ["the mode when the grid rows are automatic", "grid", { height: 300, grid_options: { rows: "auto" } }, "height: 300px"],
+    ])("sizes itself by %s", async (_name, layout, extra, style) => {
+        const root = shadow(await card(hass(), extra, layout));
+        expect(root.querySelector<HTMLElement>("ha-card")?.getAttribute("style") ?? "").toBe(style);
+    });
+
+    it("asks a sections view for the rows its header, section lines and one row need, and is never held lower", async () => {
+        const element = await card(hass(), { height: 100 });
+        expect(element.getGridOptions()).toMatchObject({ rows: "auto", min_rows: 4 });
+        expect(shadow(element).querySelector("ha-card")?.getAttribute("style")).toBe("height: 203px");
+    });
+
+    it("puts the header, the status line and the list in that order, with the waiting rows in the open section", async () => {
         const root = shadow(await card(hass(), { height: 300 }));
-        expect(root.querySelector<HTMLElement>("ha-card")?.getAttribute("style")).toBe("height:300px");
+        const haCard = root.querySelector("ha-card")!;
+        expect([...haCard.children].map((child) => child.className)).toEqual(["hd", "hd-sub", "list"]);
+        const list = haCard.querySelector(".list")!;
+        expect([...list.children].map((child) => child.classList[0])).toEqual(["switch", "fold", "switch", "fold"]);
+        expect(list.querySelector(".fold.open > .fold-in > .scroll.pending")).not.toBeNull();
+    });
+
+    it("lets the open section scroll again when the card comes back after leaving the page mid-slide", async () => {
+        const element = await card(hass());
+        visible<HTMLButtonElement>(shadow(element), "button.switch")[0].click();
+        await element.updateComplete;
+        expect(shadow(element).querySelector("ha-card")?.classList.contains("sliding")).toBe(true);
+        element.remove();
+        document.body.append(element);
+        await element.updateComplete;
+        expect(shadow(element).querySelector("ha-card")?.classList.contains("sliding")).toBe(false);
+    });
+
+    it.each([
+        ["held to a height", undefined, { height: 300 }, ["fade-bottom"]],
+        ["held up to a limit", undefined, { max_height: 300 }, ["fade-bottom"]],
+        ["held by rows in a sections view", "grid", { grid_options: { rows: 4 } }, ["fade-bottom"]],
+        [
+            "held to a height with automatic rows in a sections view",
+            "grid",
+            { height: 300, grid_options: { rows: "auto" } },
+            ["fade-bottom"],
+        ],
+        ["held by the older layout options' rows in a sections view", "grid", { layout_options: { grid_rows: 4 } }, ["fade-bottom"]],
+        ["never in auto", undefined, {}, []],
+        ["never in auto with automatic rows in a sections view", "grid", { grid_options: { rows: "auto" } }, []],
+        ["never by grid rows outside a sections view", undefined, { grid_options: { rows: 4 } }, []],
+    ])("fades the bottom edge of the open section that runs past it when %s", async (_name, layout, extra, expected) => {
+        const element = await card(hass(), extra, layout);
+        const scroll = shadow(element).querySelector(".fold.open .scroll") as HTMLElement;
+        Object.defineProperty(scroll, "scrollHeight", { value: 600, configurable: true });
+        Object.defineProperty(scroll, "clientHeight", { value: 200, configurable: true });
+        element.requestUpdate();
+        await element.updateComplete;
+        expect(["fade-top", "fade-bottom"].filter((name) => scroll.classList.contains(name))).toEqual(expected);
+    });
+
+    it("lets go of the open section's fade when the card goes from held to auto, and fades it again when held again", async () => {
+        const element = await card(hass(), { height: 300 });
+        const scroll = shadow(element).querySelector(".fold.open .scroll") as HTMLElement;
+        Object.defineProperty(scroll, "scrollHeight", { value: 600, configurable: true });
+        Object.defineProperty(scroll, "clientHeight", { value: 200, configurable: true });
+        element.requestUpdate();
+        await element.updateComplete;
+        expect([...scroll.classList].filter((name) => name.startsWith("fade"))).toEqual(["fades", "fade-bottom"]);
+        element.setConfig({ type: "custom:wud-queue-card" });
+        await element.updateComplete;
+        expect([...scroll.classList].filter((name) => name.startsWith("fade"))).toEqual([]);
+        element.setConfig({ type: "custom:wud-queue-card", height: 300 });
+        await element.updateComplete;
+        expect([...scroll.classList].filter((name) => name.startsWith("fade"))).toEqual(["fades", "fade-bottom"]);
     });
 });
 
@@ -286,6 +360,20 @@ describe("the configuration", () => {
         element.addEventListener("hass-more-info", (event) => opened.push((event as CustomEvent).detail));
         row(shadow(element), "player")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
         expect(opened).toEqual([{ entityId: "update.media_player" }]);
+    });
+
+    it("refuses a height that isn't a positive number of pixels, and an unknown height mode, with an error about the height", () => {
+        const element = document.createElement("wud-queue-card") as WudQueueCard;
+        const config = (extra: Record<string, unknown>) => ({ type: "custom:wud-queue-card", ...extra }) as never;
+        const error = translate(browserLanguage(), "common.invalid_height");
+        expect(error).toMatch(/^Invalid height\./);
+        for (const value of ["300px", 0, -10]) {
+            expect(() => element.setConfig(config({ max_height: value }))).toThrow(error);
+            expect(() => element.setConfig(config({ height: value }))).toThrow(error);
+        }
+        expect(() => element.setConfig(config({ height_mode: "tall" }))).toThrow(error);
+        // Left empty in YAML, each is unset.
+        expect(() => element.setConfig(config({ height_mode: null, height: null, max_height: null }))).not.toThrow();
     });
 });
 

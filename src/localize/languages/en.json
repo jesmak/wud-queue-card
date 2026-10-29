@@ -4,6 +4,7 @@
         "description": "What's Up Docker's container updates, grouped by compose project",
         "title": "Docker containers",
         "invalid_configuration": "Invalid configuration",
+        "invalid_height": "Invalid height. height and max_height must be positive numbers of pixels, and height_mode auto, fixed or max.",
         "no_entities": "No What's Up Docker update entities found",
         "all_current": "All up to date",
         "available": "Updates available",
@@ -44,7 +45,14 @@
         "entities_helper": "If you set update entities by hand, only they are shown.",
         "exclude": "Leave out",
         "exclude_helper": "Update entities never shown. For when you want to show everything from a device except these.",
-        "height": "Height",
-        "height_helper": "The card's height in pixels. If not set, the card's height adapts to its content."
+        "height_mode": "Height",
+        "height_mode_helper": "A height set in the layout tab of a sections view is used instead.",
+        "height_mode_auto": "Fits the content",
+        "height_mode_fixed": "Fixed",
+        "height_mode_max": "Grows up to a limit",
+        "height": "Fixed height",
+        "height_helper": "The card is always this tall, and the open list scrolls inside it.",
+        "max_height": "Maximum height",
+        "max_height_helper": "The card grows with its content up to this height, and then the open list scrolls."
     }
 }

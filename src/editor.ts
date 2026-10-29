@@ -8,6 +8,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { wudEntities } from "./containers";
 import type { HomeAssistant } from "./hass";
+import { heightData, heightSchema, tidyHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
 import type { WudQueueCardConfig } from "./types";
 
@@ -15,7 +16,7 @@ interface SchemaEntry {
     name: string;
 }
 
-function schema(hass: HomeAssistant) {
+function schema(hass: HomeAssistant, config: WudQueueCardConfig, text: (key: string) => string) {
     const entities = wudEntities(hass);
     return [
         { name: "title", selector: { text: {} } },
@@ -26,10 +27,7 @@ function schema(hass: HomeAssistant) {
         },
         { name: "entities", selector: { entity: { multiple: true, include_entities: entities } } },
         { name: "exclude", selector: { entity: { multiple: true, include_entities: entities } } },
-        {
-            name: "height",
-            selector: { number: { min: 100, max: 1200, step: 10, unit_of_measurement: "px", mode: "box" } },
-        },
+        ...heightSchema(config, text),
     ];
 }
 
@@ -49,8 +47,8 @@ export class WudQueueCardEditor extends LitElement {
         return html`
             <ha-form
                 .hass=${this.hass}
-                .data=${this.config}
-                .schema=${schema(this.hass)}
+                .data=${heightData(this.config)}
+                .schema=${schema(this.hass, this.config, (key) => this.text(key))}
                 .computeLabel=${(entry: SchemaEntry) => this.text(`editor.${entry.name}`)}
                 .computeHelper=${(entry: SchemaEntry) => this.helper(entry.name)}
                 @value-changed=${this.valueChanged}
@@ -59,9 +57,9 @@ export class WudQueueCardEditor extends LitElement {
     }
 
     private valueChanged(event: CustomEvent<{ value: WudQueueCardConfig }>): void {
-        const config: WudQueueCardConfig = { ...event.detail.value };
+        const config: WudQueueCardConfig = tidyHeight(event.detail.value);
         // Whatever is emptied is left out, so the configuration stays short.
-        for (const key of ["title", "device", "entities", "exclude", "height"] as const) {
+        for (const key of ["title", "device", "entities", "exclude"] as const) {
             const value = config[key];
             if (value === undefined || value === null || String(value) === "" || (Array.isArray(value) && value.length === 0)) {
                 delete config[key];
