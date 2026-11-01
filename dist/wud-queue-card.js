@@ -1751,7 +1751,6 @@ var WudQueueCard = class extends i4 {
                     height: 100%;
                     box-sizing: border-box;
                     overflow-y: auto;
-                    overscroll-behavior: contain;
                     scrollbar-width: thin;
                     padding-bottom: 4px;
                 }

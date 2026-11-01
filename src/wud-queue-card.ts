@@ -789,7 +789,6 @@ export class WudQueueCard extends LitElement {
                     height: 100%;
                     box-sizing: border-box;
                     overflow-y: auto;
-                    overscroll-behavior: contain;
                     scrollbar-width: thin;
                     padding-bottom: 4px;
                 }
