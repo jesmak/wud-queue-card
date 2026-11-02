@@ -175,10 +175,10 @@ describe("the two sections", () => {
         expect(root.querySelector<HTMLElement>("ha-card")?.getAttribute("style") ?? "").toBe(style);
     });
 
-    it("asks a sections view for the rows its header, section lines and one row need, and is never held lower", async () => {
+    it("asks a sections view for the rows its header, section lines and first waiting row need, and is never held lower", async () => {
         const element = await card(hass(), { height: 100 });
-        expect(element.getGridOptions()).toMatchObject({ rows: "auto", min_rows: 4 });
-        expect(shadow(element).querySelector("ha-card")?.getAttribute("style")).toBe("height: 203px");
+        expect(element.getGridOptions()).toMatchObject({ rows: "auto", min_columns: 9, min_rows: 5 });
+        expect(shadow(element).querySelector("ha-card")?.getAttribute("style")).toBe("height: 276px");
     });
 
     it("puts the header, the status line and the list in that order, with the waiting rows in the open section", async () => {
@@ -417,7 +417,7 @@ describe("with the WUD Queue integration", () => {
         row(root, "player")?.querySelector<HTMLButtonElement>("button.install")?.click();
         expect(calls[0]).toEqual(["wud_queue", "enqueue", { entity_id: ["update.media_player"] }]);
 
-        expect(action(root)?.textContent).toBe("Päivitä kaikki");
+        expect(action(root)?.textContent?.trim()).toBe("Päivitä kaikki");
         action(root)?.click();
         expect(calls[1][1]).toBe("enqueue");
         expect((calls[1][2] as { entity_id: string[] }).entity_id).toEqual([
@@ -447,7 +447,7 @@ describe("with the WUD Queue integration", () => {
         expect(row(root, "web")?.querySelector<HTMLButtonElement>("button.install")?.disabled).toBe(false);
         expect([...root.querySelectorAll(".seg")].map((s) => s.className)).toEqual(["seg done", "seg running", "seg queued"]);
 
-        expect(action(root)?.textContent).toBe("Pysäytä jono");
+        expect(action(root)?.textContent?.trim()).toBe("Pysäytä jono");
         action(root)?.click();
         expect(calls).toEqual([["wud_queue", "stop", {}]]);
     });
@@ -459,7 +459,7 @@ describe("with the WUD Queue integration", () => {
         );
         const root = shadow(await card(withQueue(hass(done, calls), { items: [item("player", "done", ["update.media_player"])] })));
         expect(row(root, "player")?.querySelector(".pill")?.textContent).toBe("Päivitetty");
-        expect(action(root)?.textContent).toBe("Kuittaa");
+        expect(action(root)?.textContent?.trim()).toBe("Kuittaa");
         action(root)?.click();
         expect(calls).toEqual([["wud_queue", "clear", {}]]);
     });
@@ -538,7 +538,7 @@ describe("with the WUD Queue integration", () => {
         const root = shadow(await card(withQueue(hass(updated, calls), { state: "failed", items: [failed] })));
         expect(row(root, "player")?.querySelector(".pill")?.textContent).toBe("Päivitetty");
         expect(root.querySelector(".errline")).toBeNull();
-        expect(action(root)?.textContent).toBe("Kuittaa");
+        expect(action(root)?.textContent?.trim()).toBe("Kuittaa");
         action(root)?.click();
         expect(calls).toEqual([["wud_queue", "clear", {}]]);
     });
@@ -548,7 +548,7 @@ describe("with the WUD Queue integration", () => {
             await card(withQueue(hass(), { state: "running", stopping: true, items: [item("app", "running", ["update.alpha_app"])] })),
         );
         expect(row(root, "player")?.querySelector<HTMLButtonElement>("button.install")?.disabled).toBe(true);
-        expect(action(root)?.textContent).toBe("Pysähtyy");
+        expect(action(root)?.textContent?.trim()).toBe("Pysähtyy");
     });
 
     it("disables its button until Home Assistant has answered", async () => {
@@ -575,7 +575,7 @@ describe("with the WUD Queue integration", () => {
         expect(root.querySelector(".hd-sub")?.textContent).toBe("player ei päivittynyt");
         expect(root.querySelector(".errline")?.textContent).toContain("puolessa tunnissa");
         expect(row(root, "wud")?.querySelector("button.install")).not.toBeNull();
-        expect(action(root)?.textContent).toBe("Yritä uudelleen");
+        expect(action(root)?.textContent?.trim()).toBe("Yritä uudelleen");
         action(root)?.click();
         expect(calls).toEqual([["wud_queue", "retry", {}]]);
     });

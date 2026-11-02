@@ -78,6 +78,8 @@ export function containerOf(entity: HassEntity): Container | undefined {
         // update_percentage. After WUD has replaced itself its entity keeps saying so, so only a container still without
         // its update counts.
         installing: entity.state === "on" && a.in_progress === true,
+        status: text(a.status),
+        created: text(a.image_created),
     };
 }
 

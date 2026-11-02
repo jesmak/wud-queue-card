@@ -13,6 +13,10 @@ export function entity(
         name?: string;
         watcher?: string;
         state?: string;
+        /** Docker's state of the container, as WUD's `status`. */
+        status?: string;
+        /** When the installed image was built, as WUD's `image_created`. */
+        created?: string;
     },
 ): HassEntity {
     const latest = options.latest ?? options.installed;
@@ -30,6 +34,8 @@ export function entity(
             display_name: options.service ?? "app",
             image_name: options.image,
             ...(options.service ? { labels_com_docker_compose_service: options.service } : {}),
+            ...(options.status ? { status: options.status } : {}),
+            ...(options.created ? { image_created: options.created } : {}),
         },
     };
 }

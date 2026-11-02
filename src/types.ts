@@ -1,7 +1,7 @@
 import type { LovelaceCardConfig } from "./hass";
-import type { HeightConfig } from "./height";
+import type { RowStepConfig } from "./rows";
 
-export interface WudQueueCardConfig extends LovelaceCardConfig, HeightConfig {
+export interface WudQueueCardConfig extends LovelaceCardConfig, RowStepConfig {
     /** Shown at the top of the card. Without one the card is titled in the viewer's language. */
     title?: string;
     /** Every WUD update entity of this device. Without `device` or `entities`, every WUD update entity there is. */
@@ -27,6 +27,10 @@ export interface Container {
     latest: string;
     pending: boolean;
     installing: boolean;
+    /** Docker's state of the container as WUD saw it, such as `running`, or empty when WUD doesn't say. */
+    status: string;
+    /** When the installed image was built, as an ISO date, or empty when WUD doesn't say. */
+    created: string;
 }
 
 /**

@@ -5,6 +5,7 @@
         "title": "Docker-kontit",
         "invalid_configuration": "Virheelliset asetukset",
         "invalid_height": "Virheellinen korkeus. Korkeuksien (height ja max_height) on oltava positiivisia lukuja pikseleinä, ja korkeustilan (height_mode) auto, fixed tai max.",
+        "invalid_row_step": "Virheellinen pyöristys. Pyöristyksen (row_step) on oltava full tai half.",
         "no_entities": "What's Up Dockerin päivitysentiteettejä ei löytynyt",
         "all_current": "Kaikki ajan tasalla",
         "available": "Päivityksiä saatavilla",
@@ -22,7 +23,14 @@
         "stopping": "Pysähtyy",
         "retry": "Yritä uudelleen",
         "queue_stopped": "Jono pysäytetty",
-        "clear": "Kuittaa"
+        "clear": "Kuittaa",
+        "containers": "{n} konttia",
+        "containers_one": "{n} kontti",
+        "projects": "{n} compose-projektia",
+        "projects_one": "{n} compose-projekti",
+        "oldest_image": "Vanhin image: {name}, tehty {age}",
+        "not_running": "{n} konttia ei käynnissä",
+        "not_running_one": "{n} kontti ei käynnissä"
     },
     "status": {
         "queued": "Jonossa",
@@ -53,6 +61,10 @@
         "height": "Kiinteä korkeus",
         "height_helper": "Kortti on aina näin korkea, ja auki oleva lista vierii sen sisällä.",
         "max_height": "Enimmäiskorkeus",
-        "max_height_helper": "Kortti kasvaa sisältönsä mukana tähän korkeuteen asti, ja sen jälkeen auki oleva lista vierii."
+        "max_height_helper": "Kortti kasvaa sisältönsä mukana tähän korkeuteen asti, ja sen jälkeen auki oleva lista vierii.",
+        "row_step": "Pyöristys osioihin jaetussa näkymässä",
+        "row_step_helper": "Automaattisella rivikorkeudella kortin korkeus pyöristetään ylöspäin kokonaisiin riveihin, tai tilan säästämiseksi puolikkaisiin riveihin.",
+        "row_step_full": "Kokonaisiin riveihin",
+        "row_step_half": "Puolikkaisiin riveihin"
     }
 }

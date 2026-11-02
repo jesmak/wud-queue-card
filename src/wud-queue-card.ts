@@ -32,6 +32,7 @@ import { ScrollFade, fadeStyles } from "./fade";
 import type { HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
+import { filledHeight, validRowStep } from "./rows";
 import type { Container, Project, Queue, Unit, WudQueueCardConfig } from "./types";
 
 console.info(
@@ -60,6 +61,67 @@ registry.customCards.push({
 
 type Section = "pending" | "current";
 
+/**
+ * The parts of a held card besides its first waiting row: the header with the round button of a narrow card, the status
+ * line kept to one line, the progress bar, the list's top padding, both section lines, the open section's bottom padding
+ * and the card's border.
+ */
+const HELD_FRAME_PX = 44 + 14 + 12 + 6 + 2 * 34 + 4 + 2;
+
+/**
+ * The most the first waiting row needs on a held card this wide or wider, at any width from there up: a compose project's
+ * label and its first row, with a 19-character name and 22-character versions, the row queued or updating, wrapping as the
+ * width needs. Measured held, with the scrollbar, from 140 px up. The worst is just under 300 px, where the narrow layout
+ * still holds. A card narrower than its columns allow (in a stack, or by a theme) takes the steps below 214.
+ */
+const FIRST_ROW_PX: [number, number][] = [
+    [214, 126],
+    [180, 134],
+    [160, 152],
+    [150, 222],
+    [0, 313],
+];
+
+/**
+ * Docker was first released in March 2013 (v0.1.0). An image dated before that year carries a reproducible build's
+ * placeholder, such as 1970-01-01.
+ */
+const DOCKER_EPOCH = Date.UTC(2013, 0, 1);
+
+const px = (value: string) => parseFloat(value) || 0;
+
+/** The parts the card itself puts in its ha-card, one after another. */
+const CARD_PARTS = [".hd", ".hd-sub", ".bar", ".list", ".idle", ".message"].map((part) => `:scope > ${part}`).join(", ");
+
+/**
+ * The list's height once its folds have slid open or shut, so the card is on its rows as a slide begins. A shut fold ends
+ * at nothing, an open one at its content, measured from where its last part ends, as its box is clipped while it slides.
+ */
+export function listEndHeight(list: HTMLElement): number {
+    const style = getComputedStyle(list);
+    let height = px(style.paddingTop) + px(style.paddingBottom);
+    for (const child of list.children) {
+        const part = child as HTMLElement;
+        if (!part.classList.contains("fold")) {
+            height += part.getBoundingClientRect().height;
+            continue;
+        }
+        const inner = part.firstElementChild as HTMLElement | null;
+        const content = inner?.firstElementChild as HTMLElement | null;
+        const last = content?.lastElementChild as HTMLElement | null;
+        if (!part.classList.contains("open") || !content || !last) {
+            continue;
+        }
+        const contentStyle = getComputedStyle(content);
+        height +=
+            last.getBoundingClientRect().bottom +
+            px(getComputedStyle(last).marginBottom) +
+            px(contentStyle.paddingBottom) -
+            content.getBoundingClientRect().top;
+    }
+    return height;
+}
+
 /** Whether a row is installing, by WUD's word or by the install the card or the queue follows. */
 function running(unit: Unit, followed: Map<string, Followed>): boolean {
     return unit.installing || followed.get(unit.key)?.status === "running";
@@ -86,6 +148,13 @@ export class WudQueueCard extends LitElement {
     /** While the sections slide, the lists don't scroll, so no scrollbar flashes as one grows. */
     @state() private sliding = false;
     private slideTimer?: number;
+    /** On automatic rows in a sections view, the height that ends on the card's row step, and what of it the content leaves over. */
+    @state() private filled = 0;
+    @state() private spare = 0;
+    /** The card's width when last measured, 0 before it is drawn. */
+    @state() private width = 0;
+    private frame?: number;
+    private readonly resizes = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => this.measureSoon());
     /** How each remembered install is going, worked out once per update. */
     private followed = new Map<string, Followed>();
     /** The projects to show, worked out once per update. */
@@ -93,8 +162,9 @@ export class WudQueueCard extends LitElement {
 
     constructor() {
         super();
-        // Fades the open section's edges while the card is held to a height, through the card's own lifecycle.
-        new ScrollFade(this, () => (this.heightStyle() ? this.renderRoot.querySelectorAll<HTMLElement>(".fold.open .scroll") : []));
+        // Fades the edges of what scrolls while the card is held to a height, the open section or the lines under the shut one,
+        // through the card's own lifecycle.
+        new ScrollFade(this, () => (this.heightStyle() ? this.renderRoot.querySelectorAll<HTMLElement>(".fold.open .scroll, .idle") : []));
     }
 
     public static getConfigElement(): HTMLElement {
@@ -124,6 +194,9 @@ export class WudQueueCard extends LitElement {
         if (!validHeight(config)) {
             throw new Error(translate(browserLanguage(), "common.invalid_height"));
         }
+        if (!validRowStep(config)) {
+            throw new Error(translate(browserLanguage(), "common.invalid_row_step"));
+        }
         this.config = { ...config, entities, exclude };
     }
 
@@ -134,22 +207,20 @@ export class WudQueueCard extends LitElement {
         return heightCardSize(this.config ?? {}, 2 + Math.min(pending, 6), this.minimumHeight());
     }
 
-    // No max_columns: a long version or digest has room to stay on one line in a wide card.
+    // No max_columns: a long version or digest has room to stay on one line in a wide card. Below 9 columns, a waiting row in
+    // a compose project has too little room left for its name beside the project's indent, its icon and its button.
     public getGridOptions(): Record<string, unknown> {
-        return { columns: 12, min_columns: 6, rows: "auto", min_rows: gridMinRows(this.minimumHeight()) };
+        return { columns: 12, min_columns: 9, rows: "auto", min_rows: gridMinRows(this.minimumHeight()) };
     }
 
     /**
-     * Held to a height, the title with its button, the status line, the progress bar, both section lines and one
-     * waiting row still fit, as measured on a full section's width. The configuration changes none of them.
+     * Held to a height, the header, the status line, the progress bar, both section lines and the first waiting row with its
+     * project's label still fit, at any width the card's 9 columns or more allow, or at its measured width if narrower. The
+     * texts above the open section keep to one line then.
      */
     private minimumHeight(): number {
-        const header = 41;
-        const status = 18;
-        const progress = 12;
-        const sectionLines = 6 + 2 * 38;
-        const row = 46 + 4;
-        return header + status + progress + sectionLines + row;
+        const width = this.width || Infinity;
+        return HELD_FRAME_PX + FIRST_ROW_PX.find(([least]) => width >= least)![1];
     }
 
     private heightStyle(): string {
@@ -169,6 +240,86 @@ export class WudQueueCard extends LitElement {
         // The timer that would have ended the slide is gone, so a card that comes back mustn't still think it slides.
         window.clearTimeout(this.slideTimer);
         this.sliding = false;
+        this.resizes?.disconnect();
+        cancelAnimationFrame(this.frame ?? 0);
+    }
+
+    protected updated(): void {
+        if (!this.isConnected) {
+            return;
+        }
+        const card = this.renderRoot.querySelector("ha-card");
+        if (card) {
+            this.resizes?.observe(card);
+        }
+        this.measureSoon();
+    }
+
+    private measureSoon(): void {
+        cancelAnimationFrame(this.frame ?? 0);
+        this.frame = requestAnimationFrame(() => this.fillRows());
+    }
+
+    /**
+     * In a sections view whose rows are left automatic, the card takes the whole rows its content needs, or the half rows
+     * with `row_step: half`, so the cards under it stay on the rows. The room left over goes under the status line, or under the
+     * progress bar while the queue has one.
+     * Measured to where the folds' slides end rather than where they are, so the card is on its rows as a slide begins.
+     */
+    private fillRows(): void {
+        const card = this.renderRoot.querySelector<HTMLElement>("ha-card");
+        if (!card || !card.clientWidth) {
+            return;
+        }
+        // The card's whole width, border included, as the widths the columns give are.
+        const width = Math.round(card.getBoundingClientRect().width);
+        if (width !== this.width) {
+            this.width = width;
+        }
+        if (this.layout !== "grid" || this.heightStyle()) {
+            if (this.filled) this.filled = 0;
+            if (this.spare) this.spare = 0;
+            return;
+        }
+        // The card's parts one after another, never the card's own height, which is the min-height set here, and only its
+        // own parts, never an element a theme adds to it. The list counts as its folds will end.
+        const style = getComputedStyle(card);
+        let content = px(style.borderTopWidth) + px(style.borderBottomWidth) + px(style.paddingTop) + px(style.paddingBottom);
+        for (const part of card.querySelectorAll<HTMLElement>(CARD_PARTS)) {
+            const partStyle = getComputedStyle(part);
+            const height = part.classList.contains("list") ? listEndHeight(part) : part.getBoundingClientRect().height;
+            content += px(partStyle.marginTop) + height + px(partStyle.marginBottom);
+        }
+        // The spare room as drawn now, which while a slide goes on is somewhere between the old and the new.
+        const list = card.querySelector<HTMLElement>(":scope > .list, :scope > .message");
+        content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
+        const filled = filledHeight(Math.round(content), this.config ?? {});
+        const spare = Math.max(0, Math.floor(filled - content));
+        if (filled !== this.filled) {
+            this.filled = filled;
+        }
+        if (spare !== this.spare) {
+            this.spare = spare;
+        }
+    }
+
+    /** The card's inline style: the height it is held to, or the rows it fills, with their spare room above the list. */
+    private cardStyle(): string {
+        const held = this.heightStyle();
+        if (held || !this.filled) {
+            return held;
+        }
+        return `min-height: ${this.filled}px; --wq-spare: ${this.spare}px`;
+    }
+
+    /** The card's classes: held to a height, its texts above the open section keep to one line, and a slide moves its rows along. */
+    private cardClass(): string {
+        return [this.heightStyle() && "held", this.sliding && "sliding"].filter(Boolean).join(" ");
+    }
+
+    /** Whether the card is held to a height that is set, fixed or in rows, and so may have room left under its content. */
+    private setHeight(): boolean {
+        return this.heightStyle().startsWith("height");
     }
 
     protected shouldUpdate(changed: PropertyValues): boolean {
@@ -253,8 +404,8 @@ export class WudQueueCard extends LitElement {
         const projects = this.projectList;
         const title = this.config.title ?? this.text("common.title");
         if (projects.length === 0) {
-            return html`<ha-card style=${this.heightStyle()}>
-                <div class="hd"><div class="hd-title">${title}</div></div>
+            return html`<ha-card style=${this.cardStyle()} class=${this.cardClass()}>
+                <div class="hd"><div class="hd-title" title=${title}>${title}</div></div>
                 <div class="message">${this.text("common.no_entities")}</div>
             </ha-card>`;
         }
@@ -275,14 +426,17 @@ export class WudQueueCard extends LitElement {
                 ? !queue || queue.stopping || this.acting
                 : pendingUnits.some((u) => running(u, followed));
 
+        // Held to a set height with nothing waiting and nothing open, the room under the one line goes to a check.
+        const idle = pendingUnits.length === 0 && open !== "current" && this.setHeight();
+
         return html`
-            <ha-card style=${this.heightStyle()} class=${this.sliding ? "sliding" : ""}>
+            <ha-card style=${this.cardStyle()} class=${this.cardClass()}>
                 <div class="hd">
-                    <div class="hd-title">${title}</div>
+                    <div class="hd-title" title=${title}>${title}</div>
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : nothing}
                 </div>
                 ${this.statusLine(pendingUnits, followed, queue)} ${queue && queue.items.length > 0 ? this.progress(queue) : nothing}
-                <div class="list">
+                <div class=${idle ? "list shut" : "list"}>
                     ${
                         pendingUnits.length === 0
                             ? nothing
@@ -290,9 +444,7 @@ export class WudQueueCard extends LitElement {
                                   currentCount === 0
                                       ? nothing
                                       : open === "pending"
-                                        ? html`<div class="switch pending">
-                                              ${this.text("common.pending_count", { n: pendingUnits.length })}
-                                          </div>`
+                                        ? this.switchLine(this.text("common.pending_count", { n: pendingUnits.length }), "pending")
                                         : this.switchRow(
                                               this.text("common.pending_count", { n: pendingUnits.length }),
                                               "pending",
@@ -311,7 +463,7 @@ export class WudQueueCard extends LitElement {
                             ? nothing
                             : html`${
                                   open === "current" && pendingUnits.length > 0
-                                      ? html`<div class="switch current">${this.text("common.current_count", { n: currentCount })}</div>`
+                                      ? this.switchLine(this.text("common.current_count", { n: currentCount }), "current")
                                       : this.switchRow(
                                             this.text("common.current_count", { n: currentCount }),
                                             open === "current" ? "none" : "current",
@@ -323,28 +475,87 @@ export class WudQueueCard extends LitElement {
                               )}`
                     }
                 </div>
+                ${idle ? this.idle() : nothing}
             </ha-card>
         `;
     }
 
+    /**
+     * The room a card held to a set height has under its one shut line while nothing waits: a check, and lines on the
+     * containers. How many containers and compose projects there are, per Docker host when there are several, the oldest
+     * installed image by when it was built, and how many containers aren't running, when any. More lines than fit scroll.
+     */
+    private idle(): TemplateResult {
+        const containers = this.projectList.flatMap((p) => p.units.flatMap((u) => u.containers));
+        const watchers = [...new Set(containers.map((c) => c.watcher))].sort();
+        const lines = watchers.map((watcher) => {
+            const own = containers.filter((c) => c.watcher === watcher);
+            const projects = new Set(own.filter((c) => c.stack).map((c) => c.stack)).size;
+            const text = [
+                watchers.length > 1 ? watcher : "",
+                this.count("containers", own.length),
+                projects > 0 ? this.count("projects", projects) : "",
+            ]
+                .filter(Boolean)
+                .join(" · ");
+            return { icon: "mdi:docker", text };
+        });
+        const oldest = containers
+            .filter((c) => Date.parse(c.created) >= DOCKER_EPOCH)
+            .sort((a, b) => Date.parse(a.created) - Date.parse(b.created))[0];
+        if (oldest) {
+            lines.push({
+                icon: "mdi:clock-outline",
+                text: this.text("common.oldest_image", { name: oldest.name, age: this.age(oldest.created) }),
+            });
+        }
+        // WUD says only what Docker does, so anything but running counts, whatever Docker calls it.
+        const stopped = containers.filter((c) => c.status && c.status !== "running").length;
+        if (stopped > 0) {
+            lines.push({ icon: "mdi:stop-circle-outline", text: this.count("not_running", stopped) });
+        }
+        return html`<div class="idle">
+            <ha-icon class="idle-icon" icon="mdi:check-circle-outline"></ha-icon>
+            <div class="idle-lines">
+                ${lines.map(
+                    ({ icon, text }) =>
+                        html`<div class="idle-line"><ha-icon icon=${icon}></ha-icon><span title=${text}>${text}</span></div>`,
+                )}
+            </div>
+        </div>`;
+    }
+
+    /** A count with its noun, which takes the singular for one. */
+    private count(key: string, n: number): string {
+        return this.text(`common.${key}${n === 1 ? "_one" : ""}`, { n });
+    }
+
+    /** How long ago a date was, in days, months or years, in the viewer's language. */
+    private age(date: string): string {
+        const days = Math.max(0, Math.floor((Date.now() - Date.parse(date)) / 86_400_000));
+        const format = new Intl.RelativeTimeFormat(this.language(), { numeric: "auto" });
+        if (days < 60) {
+            return format.format(-days, "day");
+        }
+        return days < 730 ? format.format(-Math.round(days / 30.44), "month") : format.format(-Math.round(days / 365.25), "year");
+    }
+
     /** One line under the title: what is going on, or what is waiting. */
     private statusLine(units: Unit[], followed: Map<string, Followed>, queue: Queue | undefined): TemplateResult {
+        const line = (text: string) => html`<div class="hd-sub" title=${text}>${text}</div>`;
         const installing = units.filter((u) => running(u, followed));
         if (installing.length > 0) {
-            const names = installing.map((u) => u.name).join(", ");
-            return html`<div class="hd-sub">${this.text("common.updating", { name: names })}</div>`;
+            return line(this.text("common.updating", { name: installing.map((u) => u.name).join(", ") }));
         }
         const failed = units.filter((u) => followed.get(u.key)?.status === "failed");
         if (failed.length > 0) {
-            const names = failed.map((u) => u.name).join(", ");
-            return html`<div class="hd-sub">${this.text("common.failed", { name: names })}</div>`;
+            return line(this.text("common.failed", { name: failed.map((u) => u.name).join(", ") }));
         }
         if (queue?.state === "stopped") {
-            return html`<div class="hd-sub">${this.text("common.queue_stopped")}</div>`;
+            return line(this.text("common.queue_stopped"));
         }
         // The section line below already counts the waiting updates.
-        const key = units.some((u) => u.pending) ? "common.available" : "common.all_current";
-        return html`<div class="hd-sub">${this.text(key)}</div>`;
+        return line(this.text(units.some((u) => u.pending) ? "common.available" : "common.all_current"));
     }
 
     /** A project with something to install: its label when it has several rows, then the rows. */
@@ -397,7 +608,7 @@ export class WudQueueCard extends LitElement {
         const from = status === "done" ? (moved[shown.entity_id] ?? "") : shown.installed;
         const to = status === "done" ? shown.installed : shown.latest;
         return html`
-            <div class="row" role="button" tabindex="0" @click=${() => this.moreInfo(unit)} @keydown=${this.onKey(unit)}>
+            <div class="row unit" role="button" tabindex="0" @click=${() => this.moreInfo(unit)} @keydown=${this.onKey(unit)}>
                 ${this.statusIcon(status)}
                 <div class="info">
                     <div class="name">${unit.name}${this.serviceCount(unit, followed)}</div>
@@ -457,7 +668,9 @@ export class WudQueueCard extends LitElement {
             done: "mdi:check",
             failed: "mdi:alert-circle-outline",
         };
-        return html`<ha-icon class="ico ${status}" icon=${icons[status]}></ha-icon>`;
+        // A narrow card hides the row's pill, so the icon carries its text.
+        const label = status === "pending" ? nothing : this.text(`status.${status}`);
+        return html`<ha-icon class="ico ${status}" icon=${icons[status]} title=${label} aria-label=${label}></ha-icon>`;
     }
 
     /** "5 services", or "2/5 services" while they install. Nothing for a row of one container. */
@@ -481,9 +694,14 @@ export class WudQueueCard extends LitElement {
             aria-expanded=${target === "none" ? "true" : "false"}
             @click=${() => this.switchTo(target)}
         >
-            <span>${label} ${pill}</span>
+            <span class="switch-label"><span class="switch-text" title=${label}>${label}</span>${pill}</span>
             <span>${this.text(target === "none" ? "common.hide" : "common.show")}</span>
         </button>`;
+    }
+
+    /** The open section's line, which has nothing to switch to. */
+    private switchLine(label: string, section: Section): TemplateResult {
+        return html`<div class="switch ${section}"><span class="switch-text" title=${label}>${label}</span></div>`;
     }
 
     private switchTo(target: Section | "none"): void {
@@ -567,31 +785,36 @@ export class WudQueueCard extends LitElement {
     /** The queue's one button: update everything waiting, stop the run, try again after a failure, or clear a finished run. */
     private queueAction(queue: Queue, units: Unit[], followed: Map<string, Followed>): TemplateResult | typeof nothing {
         if (queue.state === "running") {
-            return this.actionButton(this.text(queue.stopping ? "common.stopping" : "common.stop"), queue.stopping, () =>
+            return this.actionButton(this.text(queue.stopping ? "common.stopping" : "common.stop"), "mdi:stop", queue.stopping, () =>
                 this.call("stop"),
             );
         }
         // A failed run whose containers have all got their updates some other way has nothing to try again, only to put away.
         if (queue.state === "failed") {
             return this.hass && retryable(this.hass, queue)
-                ? this.actionButton(this.text("common.retry"), false, () => this.call("retry"))
-                : this.actionButton(this.text("common.clear"), false, () => this.call("clear"));
+                ? this.actionButton(this.text("common.retry"), "mdi:refresh", false, () => this.call("retry"))
+                : this.actionButton(this.text("common.clear"), "mdi:check", false, () => this.call("clear"));
         }
         const waiting = units
             .filter((u) => u.pending && !["queued", "running"].includes(followed.get(u.key)?.status ?? ""))
             .flatMap((u) => u.containers.filter((c) => c.pending).map((c) => c.entity_id));
         if (waiting.length > 0) {
-            return this.actionButton(this.text("common.update_all"), false, () => this.call("enqueue", { entity_id: waiting }));
+            return this.actionButton(this.text("common.update_all"), "mdi:update", false, () =>
+                this.call("enqueue", { entity_id: waiting }),
+            );
         }
         // Nothing to do but finished rows on show: they can be put away before the queue does it by itself.
         if (queue.items.some((i) => i.status === "done")) {
-            return this.actionButton(this.text("common.clear"), false, () => this.call("clear"));
+            return this.actionButton(this.text("common.clear"), "mdi:check", false, () => this.call("clear"));
         }
         return nothing;
     }
 
-    private actionButton(label: string, disabled: boolean, action: () => void): TemplateResult {
-        return html`<button class="action" ?disabled=${disabled || this.acting} @click=${action}>${label}</button>`;
+    /** The text of a wide card, or a round icon on a narrow one, with the text as its tooltip and label. */
+    private actionButton(label: string, icon: string, disabled: boolean, action: () => void): TemplateResult {
+        return html`<button class="action" title=${label} aria-label=${label} ?disabled=${disabled || this.acting} @click=${action}>
+            <ha-icon icon=${icon}></ha-icon><span>${label}</span>
+        </button>`;
     }
 
     private call(service: string, data: Record<string, unknown> = {}): void {
@@ -698,6 +921,11 @@ export class WudQueueCard extends LitElement {
                 /* The card's one call to action, so it looks like one on any theme. */
                 .action {
                     flex: none;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    white-space: nowrap;
+                    --mdc-icon-size: 18px;
                     font: inherit;
                     font-size: 12.5px;
                     font-weight: 500;
@@ -707,6 +935,10 @@ export class WudQueueCard extends LitElement {
                     border-radius: 16px;
                     padding: 5px 12px;
                     cursor: pointer;
+                }
+
+                .action ha-icon {
+                    display: none;
                 }
 
                 .action:disabled {
@@ -763,16 +995,19 @@ export class WudQueueCard extends LitElement {
                 }
 
                 .message {
+                    margin-top: var(--wq-spare, 0px);
                     padding: 4px 16px 14px;
                     font-size: 12px;
                     color: var(--secondary-text-color);
                 }
 
+                /* The room a whole row leaves over goes above the list, under the status line or the progress bar. */
                 .list {
                     flex: 1 1 auto;
                     min-height: 0;
                     display: flex;
                     flex-direction: column;
+                    margin-top: var(--wq-spare, 0px);
                     padding-top: 6px;
                 }
 
@@ -1084,10 +1319,153 @@ export class WudQueueCard extends LitElement {
                     .proj-body .errline {
                         margin-left: 10px;
                     }
+
+                    /* A waiting row's versions take a line of their own across the row, under its icon too. */
+                    .row.unit {
+                        display: grid;
+                        grid-template-columns: 28px minmax(0, 1fr) auto;
+                        row-gap: 2px;
+                    }
+
+                    .row.unit .info {
+                        display: contents;
+                    }
+
+                    .row.unit .name {
+                        grid-column: 2;
+                    }
+
+                    .row.unit .sub {
+                        grid-column: 1 / -1;
+                        grid-row: 2;
+                    }
+
+                    /* A row's pill would take half of it, so its icon says the same instead. */
+                    .row .end:has(> .pill) {
+                        display: none;
+                    }
+
+                    .action {
+                        width: 32px;
+                        height: 32px;
+                        padding: 0;
+                        border-radius: 50%;
+                        justify-content: center;
+                    }
+
+                    .action ha-icon {
+                        display: inline-flex;
+                    }
+
+                    .action span {
+                        display: none;
+                    }
                 }
 
                 button.switch {
                     cursor: pointer;
+                }
+
+                .switch-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-width: 0;
+                }
+
+                /* Held to a height, the texts above the open section keep to one line, cut short with their text as a tooltip. */
+                .held .hd-title,
+                .held .hd-sub,
+                .held .switch-text {
+                    min-width: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                .held .switch-label .pill {
+                    flex: none;
+                }
+
+                /* Held, the open section scrolls, so its scrollbar and, as the card's last part, its end keep off the card's edges. */
+                .held .list > .fold.open {
+                    margin-right: 4px;
+                }
+
+                .held .list > .fold.open:last-child {
+                    margin-bottom: 8px;
+                }
+
+                .held .list > .fold.open:last-child .scroll {
+                    padding-bottom: 0;
+                }
+
+                /* Held and shut, the room under the line goes to the check and its lines instead of the list. */
+                .held .list.shut {
+                    flex: none;
+                }
+
+                /* With more lines than fit, it scrolls from its top. The lists are shut, so it is the card's only scroller. */
+                .idle {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    overflow-y: auto;
+                    scrollbar-width: thin;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: safe center;
+                    gap: 4px;
+                    margin-right: 4px;
+                    padding: 0 12px 12px 16px;
+                    color: var(--secondary-text-color);
+                }
+
+                .idle-icon {
+                    --mdc-icon-size: 64px;
+                    flex: none;
+                    margin-bottom: 4px;
+                    color: var(--success-color, #43a047);
+                    opacity: 0.5;
+                }
+
+                /* The lines are centred as one block, so their icons line up. */
+                .idle-lines {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    min-width: 0;
+                    max-width: 100%;
+                }
+
+                .idle-line {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    max-width: 100%;
+                    font-size: 12px;
+                    line-height: 16px;
+                    --mdc-icon-size: 16px;
+                }
+
+                .idle-line ha-icon {
+                    flex: none;
+                }
+
+                .idle-line span {
+                    min-width: 0;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* The rows the card fills, and the spare room above the list, change along with a slide, not on ha-card's own timing. */
+                ha-card.sliding {
+                    transition: min-height var(--ha-animation-duration-normal, 250ms) ease;
+                }
+
+                ha-card.sliding > .list {
+                    transition: margin var(--ha-animation-duration-normal, 250ms) ease;
                 }
 
                 /* A wide card has room for a waiting row's versions beside its name, next to the button. */
@@ -1114,7 +1492,9 @@ export class WudQueueCard extends LitElement {
                         animation: none;
                     }
 
-                    .fold {
+                    .fold,
+                    ha-card.sliding,
+                    ha-card.sliding > .list {
                         transition: none;
                     }
                 }

@@ -76,16 +76,17 @@ version only at its next scheduled watch, and until then the card shows an insta
 
 ## Options
 
-| Name          | Type   | Description                                                                                                                                                                                                                                      | Default                                                                         |
-| ------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `type`        | string | `custom:wud-queue-card`                                                                                                                                                                                                                          | required                                                                        |
-| `title`       | string | Shown at the top of the card                                                                                                                                                                                                                     | Docker containers, translated                                                   |
-| `device`      | string | The id of a WUD device, whose update entities the card shows                                                                                                                                                                                     | every WUD update entity                                                         |
-| `entities`    | list   | The update entities to show, instead of the card finding them                                                                                                                                                                                    | found by the card                                                               |
-| `exclude`     | list   | Update entities never shown, whether found or listed                                                                                                                                                                                             |                                                                                 |
-| `height_mode` | string | How tall the card is. `auto` fits its content, `fixed` keeps it at `height`, `max` lets it grow up to `max_height`. In `fixed` and `max` the open list scrolls. A height in grid rows, set in the layout tab of a sections view, is used instead | `fixed` when `height` is set, `max` when only `max_height` is, otherwise `auto` |
-| `height`      | number | The card's height in pixels, for `fixed`                                                                                                                                                                                                         |                                                                                 |
-| `max_height`  | number | The card's greatest height in pixels, for `max`                                                                                                                                                                                                  |                                                                                 |
+| Name          | Type   | Description                                                                                                                                                                                                                                                           | Default                                                                         |
+| ------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `type`        | string | `custom:wud-queue-card`                                                                                                                                                                                                                                               | required                                                                        |
+| `title`       | string | Shown at the top of the card                                                                                                                                                                                                                                          | Docker containers, translated                                                   |
+| `device`      | string | The id of a WUD device, whose update entities the card shows                                                                                                                                                                                                          | every WUD update entity                                                         |
+| `entities`    | list   | The update entities to show, instead of the card finding them                                                                                                                                                                                                         | found by the card                                                               |
+| `exclude`     | list   | Update entities never shown, whether found or listed                                                                                                                                                                                                                  |                                                                                 |
+| `height_mode` | string | How tall the card is. `auto` fits its content, `fixed` keeps it at `height`, `max` lets it grow up to `max_height`. In `fixed` and `max` the open list scrolls. A height in grid rows, set in the layout tab of a sections view, is used instead                      | `fixed` when `height` is set, `max` when only `max_height` is, otherwise `auto` |
+| `height`      | number | The card's height in pixels, for `fixed`                                                                                                                                                                                                                              |                                                                                 |
+| `max_height`  | number | The card's greatest height in pixels, for `max`                                                                                                                                                                                                                       |                                                                                 |
+| `row_step`    | string | How the card rounds its height on automatic rows in a sections view, with `height_mode` at `auto`. `full` ends it on whole rows, `half` on half rows, which saves up to half a row but can leave the cards under it half a row off the rows of the sections beside it | `full`                                                                          |
 
 Every option is in the visual editor. Without `device` or `entities`, the card shows every update entity WUD has
 made, from all its watchers. WUD makes a device per watcher, so `device` limits the card to one Docker host. The
@@ -161,17 +162,28 @@ The queue's own README tells how it decides an install failed, and what its even
 
 ## Sizes
 
-In a sections view the card takes 12 columns by default and at least 6, and grows as tall as its open list. It works
-at any width. On a narrow card long versions move under the container's name, and on a wide one a waiting row's
-versions sit beside its name, next to the install button.
+In a sections view the card takes 12 columns by default and at least 9, and grows as tall as its open list. On
+automatic rows it ends on whole rows, so the cards under it stay on the rows, and any room left over goes under the
+status line, or under the progress bar while the queue has one. With `row_step: half` it ends on half rows instead.
 
-<img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-light.png#gh-light-mode-only" width="250" alt="The queue on a card half a section wide, the long versions of a group of services wrapped under its name beside the Updating pill">
-<img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-dark.png#gh-dark-mode-only" width="250" alt="The queue on a card half a section wide, the long versions of a group of services wrapped under its name beside the Updating pill">
+On a narrow card a waiting row's versions take a line of their own, and a row's status shows only as its icon, with
+the status as the icon's tooltip. On a wide card a waiting row's versions sit beside its name, next to the install
+button.
+
+<img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-light.png#gh-light-mode-only" width="250" alt="The queue on a narrow card, a group of services updating with its spinning icon and its long versions on a line of their own under its name">
+<img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-dark.png#gh-dark-mode-only" width="250" alt="The queue on a narrow card, a group of services updating with its spinning icon and its long versions on a line of their own under its name">
 
 Set `height`, or `max_height` for a card that grows only up to it, so that a long list doesn't make the card taller
 than the rest of the dashboard. The title, the status line, the progress bar and the section lines stay where they are, and the open
-list scrolls in what is left. The same happens when the card's rows are set in a sections view. The card never gets lower than those and
-one row of the open list need.
+list scrolls in what is left. The same happens when the card's rows are set in a sections view. The title, the status line and
+the section lines then keep to one line each, cut short with their whole text as a tooltip. The card never gets lower
+than those, the progress bar and the first waiting row with its compose project's name need, at any width its columns
+allow. Held this way, the open list keeps off the card's right edge, and off its bottom edge when nothing comes after
+it.
+
+With `height` or rows set and nothing waiting, while the up-to-date list is shut, the room under its line shows a check, how
+many containers and compose projects there are, per Docker host when there are several, the oldest installed image
+and when it was built, and how many containers aren't running, when any.
 
 ## Examples
 
@@ -208,7 +220,7 @@ entities:
 ## Data
 
 The card reads the update entities WUD publishes over MQTT. It takes their installed and latest versions, whether an
-install is running, and the attributes WUD adds to them, such as the compose project, service and image. With the
+install is running, and the attributes WUD adds to them, such as the compose project, service and image, the container's state in Docker and when its image was built. With the
 integration it also reads the queue's sensor, which it finds in the entity registry by the integration's name. It
 fetches nothing itself, and talks to WUD only through `update.install` or the queue's actions.
 
@@ -232,19 +244,22 @@ npm run check
 `npm run check` typechecks, lints, checks formatting, runs the tests and builds `dist/wud-queue-card.js`, which is
 the file HACS installs and is committed to the repository.
 
-| Path                       | What it contains                                                     |
-| -------------------------- | -------------------------------------------------------------------- |
-| `src/wud-queue-card.ts`    | The card itself                                                      |
-| `src/editor.ts`            | The visual editor                                                    |
-| `src/containers.ts`        | Reading WUD's update entities, grouping them, and following installs |
-| `src/types.ts`             | The card's options and the shapes of what it shows                   |
-| `src/const.ts`             | The timings for following an install                                 |
-| `src/hass.ts`              | The few Home Assistant types the card needs                          |
-| `src/localize/localize.ts` | Finding the viewer's language and its texts                          |
-| `scripts/build.mjs`        | The esbuild build                                                    |
-| `src/localize/languages/`  | The card's texts, one JSON file per language                         |
-| `docs/screenshots.json`    | The made-up data the README's screenshots are taken from             |
-| `tests/`                   | Tests, run with vitest                                               |
+| Path                       | What it contains                                                              |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `src/wud-queue-card.ts`    | The card itself                                                               |
+| `src/editor.ts`            | The visual editor                                                             |
+| `src/containers.ts`        | Reading WUD's update entities, grouping them, and following installs          |
+| `src/types.ts`             | The card's options and the shapes of what it shows                            |
+| `src/const.ts`             | The timings for following an install                                          |
+| `src/hass.ts`              | The few Home Assistant types the card needs                                   |
+| `src/height.ts`            | The height mode, shared with the author's other cards                         |
+| `src/rows.ts`              | Rounding to the rows of a sections view, shared with the author's other cards |
+| `src/fade.ts`              | The fading edges of what scrolls, shared with the author's other cards        |
+| `src/localize/localize.ts` | Finding the viewer's language and its texts                                   |
+| `scripts/build.mjs`        | The esbuild build                                                             |
+| `src/localize/languages/`  | The card's texts, one JSON file per language                                  |
+| `docs/screenshots.json`    | The made-up data the README's screenshots are taken from                      |
+| `tests/`                   | Tests, run with vitest                                                        |
 
 ## Support
 

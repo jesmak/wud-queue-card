@@ -1,6 +1,6 @@
 /**
  * The card's visual editor: the title, which updates are shown (a WUD device, a list of update entities,
- * or every WUD update), the ones left out, and the card's height.
+ * or every WUD update), the ones left out, the card's height and how it rounds to the rows of a sections view.
  */
 import { LitElement, html, nothing } from "lit";
 import type { TemplateResult } from "lit";
@@ -10,6 +10,7 @@ import { wudEntities } from "./containers";
 import type { HomeAssistant } from "./hass";
 import { heightData, heightSchema, tidyHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
+import { rowStepData, rowStepSchema, tidyRowStep } from "./rows";
 import type { WudQueueCardConfig } from "./types";
 
 interface SchemaEntry {
@@ -28,6 +29,7 @@ function schema(hass: HomeAssistant, config: WudQueueCardConfig, text: (key: str
         { name: "entities", selector: { entity: { multiple: true, include_entities: entities } } },
         { name: "exclude", selector: { entity: { multiple: true, include_entities: entities } } },
         ...heightSchema(config, text),
+        ...rowStepSchema(config, text),
     ];
 }
 
@@ -47,7 +49,7 @@ export class WudQueueCardEditor extends LitElement {
         return html`
             <ha-form
                 .hass=${this.hass}
-                .data=${heightData(this.config)}
+                .data=${rowStepData(heightData(this.config))}
                 .schema=${schema(this.hass, this.config, (key) => this.text(key))}
                 .computeLabel=${(entry: SchemaEntry) => this.text(`editor.${entry.name}`)}
                 .computeHelper=${(entry: SchemaEntry) => this.helper(entry.name)}
@@ -57,7 +59,7 @@ export class WudQueueCardEditor extends LitElement {
     }
 
     private valueChanged(event: CustomEvent<{ value: WudQueueCardConfig }>): void {
-        const config: WudQueueCardConfig = tidyHeight(event.detail.value);
+        const config: WudQueueCardConfig = tidyRowStep(tidyHeight(event.detail.value));
         // Whatever is emptied is left out, so the configuration stays short.
         for (const key of ["title", "device", "entities", "exclude"] as const) {
             const value = config[key];

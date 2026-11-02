@@ -5,6 +5,7 @@
         "title": "Docker containers",
         "invalid_configuration": "Invalid configuration",
         "invalid_height": "Invalid height. height and max_height must be positive numbers of pixels, and height_mode auto, fixed or max.",
+        "invalid_row_step": "Invalid rounding. row_step must be full or half.",
         "no_entities": "No What's Up Docker update entities found",
         "all_current": "All up to date",
         "available": "Updates available",
@@ -22,7 +23,14 @@
         "stopping": "Stopping",
         "retry": "Retry",
         "queue_stopped": "Queue stopped",
-        "clear": "Clear"
+        "clear": "Clear",
+        "containers": "{n} containers",
+        "containers_one": "{n} container",
+        "projects": "{n} compose projects",
+        "projects_one": "{n} compose project",
+        "oldest_image": "Oldest image: {name}, built {age}",
+        "not_running": "{n} containers not running",
+        "not_running_one": "{n} container not running"
     },
     "status": {
         "queued": "Queued",
@@ -53,6 +61,10 @@
         "height": "Fixed height",
         "height_helper": "The card is always this tall, and the open list scrolls inside it.",
         "max_height": "Maximum height",
-        "max_height_helper": "The card grows with its content up to this height, and then the open list scrolls."
+        "max_height_helper": "The card grows with its content up to this height, and then the open list scrolls.",
+        "row_step": "Rounding in a sections view",
+        "row_step_helper": "With automatic row height, the card's height is rounded up to whole rows, or to half rows to save space.",
+        "row_step_full": "Whole rows",
+        "row_step_half": "Half rows"
     }
 }
