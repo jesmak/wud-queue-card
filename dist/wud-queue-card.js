@@ -1498,6 +1498,7 @@ var WudQueueCard = class extends i4 {
     return b2`
             <ha-card style=${this.cardStyle()} class=${this.cardClass()}>
                 <div class="hd">
+                    ${pendingUnits.length === 0 ? b2`<ha-icon class="hd-icon" icon="mdi:check-circle-outline"></ha-icon>` : A}
                     <div class="hd-title" title=${title}>${title}</div>
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : A}
                 </div>
@@ -1949,6 +1950,12 @@ var WudQueueCard = class extends i4 {
                     background: var(--error-color, #db4437);
                 }
 
+                /* A check before the title while nothing waits, as in updates-card. */
+                .hd-icon {
+                    flex: none;
+                    color: var(--success-color, #43a047);
+                }
+
                 .hd-title {
                     flex: 1 1 auto;
                     min-width: 0;
@@ -1962,6 +1969,11 @@ var WudQueueCard = class extends i4 {
                     padding: 0 16px;
                     font-size: 12px;
                     color: var(--primary-text-color);
+                }
+
+                /* Under the check, the status line starts where the title does: the header's padding, the icon and the gap. */
+                .hd:has(.hd-icon) + .hd-sub {
+                    padding-left: 50px;
                 }
 
                 .message {
@@ -2277,6 +2289,10 @@ var WudQueueCard = class extends i4 {
                         padding-right: 10px;
                     }
 
+                    .hd:has(.hd-icon) + .hd-sub {
+                        padding-left: 42px;
+                    }
+
                     .proj-body {
                         margin-left: 22px;
                     }
@@ -2408,9 +2424,10 @@ var WudQueueCard = class extends i4 {
                     max-width: 100%;
                 }
 
+                /* A line wraps rather than cut short, its icon by its first line, as the room scrolls when they don't fit. */
                 .idle-line {
                     display: flex;
-                    align-items: center;
+                    align-items: flex-start;
                     gap: 6px;
                     max-width: 100%;
                     font-size: 12px;
@@ -2424,9 +2441,7 @@ var WudQueueCard = class extends i4 {
 
                 .idle-line span {
                     min-width: 0;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
+                    overflow-wrap: anywhere;
                 }
 
                 /* The rows the card fills, and the spare room above the list, change along with a slide, not on ha-card's own timing. */

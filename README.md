@@ -107,7 +107,7 @@ says that updates are available or that everything is up to date. Then come the 
 Each WUD watcher is a Docker host of its own, and its projects are kept apart from the other hosts' even when they
 share a name. When the card shows several watchers, each project's name is followed by its watcher's.
 
-When nothing is waiting, the card is just the title and a line that opens the up-to-date list. When the first update
+When nothing is waiting, the card is just the title, with a check before it, and a line that opens the up-to-date list. When the first update
 comes in, the waiting list opens by itself, even if the up-to-date list was open.
 
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/all-current-light.png#gh-light-mode-only" width="490" alt="A card with all containers up to date, folded into a single line">

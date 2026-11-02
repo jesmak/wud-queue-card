@@ -126,6 +126,16 @@ describe("the height the list ends at once its sections have slid", () => {
     });
 });
 
+describe("the header's check", () => {
+    it.each([
+        ["shows while nothing waits, as in updates-card", quiet, true],
+        ["is gone while an update waits", sample, false],
+    ])("%s", async (_name, list, shown) => {
+        const element = await card(hass(list()));
+        expect(one(element, ".hd .hd-icon")?.getAttribute("icon") ?? null).toBe(shown ? "mdi:check-circle-outline" : null);
+    });
+});
+
 describe("filling the rows of a sections view", () => {
     /** The card's parts given their boxes, rows filled, and the card's style returned. */
     async function filled(element: WudQueueCard, theme = false): Promise<string> {
