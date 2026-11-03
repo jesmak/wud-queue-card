@@ -119,6 +119,11 @@ describe("the height the list ends at once its sections have slid", () => {
             160,
         ],
         ["a section without rows ends at nothing", [{ height: 34 }, fold(true, 10, 100, [])], 40],
+        [
+            "an open section as the last part of a held card's list ends under the room kept below it",
+            [{ height: 34 }, { ...fold(true, 10, 100, rows), style: "margin-bottom: 8px" }],
+            134,
+        ],
     ])("%s", (_name, children, height) => {
         const list = build({ style: "padding-top: 6px", height: 0, children });
         document.body.append(list);
@@ -138,7 +143,7 @@ describe("the header's check", () => {
 
 describe("filling the rows of a sections view", () => {
     /** The card's parts given their boxes, rows filled, and the card's style returned. */
-    async function filled(element: WudQueueCard, theme = false): Promise<string> {
+    async function filled(element: WudQueueCard, theme = false, line = 22): Promise<string> {
         const haCard = one(element, "ha-card")!;
         const box = (target: Element, height: number) =>
             (target.getBoundingClientRect = () => ({ top: 0, bottom: height, height, width: 300 }) as DOMRect);
@@ -146,7 +151,7 @@ describe("filling the rows of a sections view", () => {
         box(haCard, 56);
         box(one(element, ".hd")!, 41);
         box(one(element, ".hd-sub")!, 17);
-        box(one(element, ".switch")!, 22);
+        box(one(element, ".switch")!, line);
         if (theme) {
             const added = document.createElement("div");
             box(added, 500);
@@ -165,6 +170,26 @@ describe("filling the rows of a sections view", () => {
         expect(await filled(element)).toBe(style);
     });
 
+    // The limit is rounded down to the rows, but never under the rows the card's least height needs.
+    it.each([
+        ["under it, on the rows its content needs", { max_height: 600 }, 22, "max-height: 568px; min-height: 120px; --wq-spare: 34px"],
+        [
+            "over it, on the limit rounded down to the rows",
+            { max_height: 600 },
+            900,
+            "max-height: 568px; min-height: 568px; --wq-spare: 0px",
+        ],
+        [
+            "under its least, raised to the rows that needs",
+            { max_height: 300 },
+            22,
+            "max-height: 312px; min-height: 120px; --wq-spare: 34px",
+        ],
+    ])("on automatic rows, grows up to a limit %s", async (_name, config, line, style) => {
+        const element = await card(hass(quiet()), config, "grid");
+        expect(await filled(element, false, line)).toBe(style);
+    });
+
     it("measures only its own parts, never an element a theme adds to it", async () => {
         const element = await card(hass(quiet()), {}, "grid");
         expect(await filled(element, true)).toBe("min-height: 120px; --wq-spare: 34px");
@@ -173,7 +198,6 @@ describe("filling the rows of a sections view", () => {
     it.each([
         ["outside a sections view", {}, undefined, ""],
         ["held to a height", { height: 300 }, "grid", "height: 300px"],
-        ["held up to a limit", { max_height: 300 }, "grid", "max-height: 300px"],
         ["on rows set in the layout tab", { grid_options: { rows: 5 } }, "grid", "height: 100%"],
     ])("leaves its rows alone %s", async (_name, config, layout, style) => {
         const element = await card(hass(quiet()), config as Partial<WudQueueCardConfig>, layout);

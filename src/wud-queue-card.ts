@@ -32,7 +32,7 @@ import { ScrollFade, fadeStyles } from "./fade";
 import type { HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
-import { filledHeight, validRowStep } from "./rows";
+import { fillLimit, filledHeight, filledStyle, validRowStep } from "./rows";
 import type { Container, Project, Queue, Unit, WudQueueCardConfig } from "./types";
 
 console.info(
@@ -108,8 +108,11 @@ export function listEndHeight(list: HTMLElement): number {
     let height = px(style.paddingTop) + px(style.paddingBottom);
     for (const child of list.children) {
         const part = child as HTMLElement;
+        const partStyle = getComputedStyle(part);
+        // Its own margins too, such as the room a held card keeps under an open section that is the list's last part.
+        const margins = px(partStyle.marginTop) + px(partStyle.marginBottom);
         if (!part.classList.contains("fold")) {
-            height += part.getBoundingClientRect().height;
+            height += margins + part.getBoundingClientRect().height;
             continue;
         }
         const inner = part.firstElementChild as HTMLElement | null;
@@ -120,6 +123,7 @@ export function listEndHeight(list: HTMLElement): number {
         }
         const contentStyle = getComputedStyle(content);
         height +=
+            margins +
             last.getBoundingClientRect().bottom +
             px(getComputedStyle(last).marginBottom) +
             px(contentStyle.paddingBottom) -
@@ -327,7 +331,8 @@ export class WudQueueCard extends LitElement {
 
     /**
      * In a sections view whose rows are left automatic, the card takes the whole rows its content needs, or the half rows
-     * with `row_step: half`, so the cards under it stay on the rows. The room left over goes under the status line, or under the
+     * with `row_step: half`, so the cards under it stay on the rows, up to the limit of a card that grows up to one. The
+     * room left over goes under the status line, or under the
      * progress bar while the queue has one.
      * Measured to where the folds' slides end rather than where they are, so the card is on its rows as a slide begins.
      */
@@ -341,7 +346,8 @@ export class WudQueueCard extends LitElement {
         if (width !== this.width) {
             this.width = width;
         }
-        if (this.layout !== "grid" || this.heightStyle()) {
+        const limit = fillLimit(this.config ?? {}, this.layout, this.minimumHeight());
+        if (!limit) {
             if (this.filled) this.filled = 0;
             if (this.spare) this.spare = 0;
             return;
@@ -358,7 +364,7 @@ export class WudQueueCard extends LitElement {
         // The spare room as drawn now, which while a slide goes on is somewhere between the old and the new.
         const list = card.querySelector<HTMLElement>(":scope > .list, :scope > .message");
         content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
-        const filled = filledHeight(Math.round(content), this.config ?? {});
+        const filled = filledHeight(Math.round(content), this.config ?? {}, limit);
         const spare = Math.max(0, Math.floor(filled - content));
         if (filled !== this.filled) {
             this.filled = filled;
@@ -368,13 +374,10 @@ export class WudQueueCard extends LitElement {
         }
     }
 
-    /** The card's inline style: the height it is held to, or the rows it fills, with their spare room above the list. */
+    /** The card's inline style: the height it is held to, or the rows it fills up to any limit, with their spare room above the list. */
     private cardStyle(): string {
-        const held = this.heightStyle();
-        if (held || !this.filled) {
-            return held;
-        }
-        return `min-height: ${this.filled}px; --wq-spare: ${this.spare}px`;
+        const style = filledStyle(this.config ?? {}, this.layout, this.minimumHeight(), this.filled);
+        return this.filled ? `${style}; --wq-spare: ${this.spare}px` : style;
     }
 
     /** The card's classes: held to a height, its texts above the open section keep to one line, and a slide moves its rows along. */
