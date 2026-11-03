@@ -167,8 +167,8 @@ automatic rows it ends on whole rows, so the cards under it stay on the rows, an
 status line, or under the progress bar while the queue has one. With `row_step: half` it ends on half rows instead.
 
 On a narrow card a waiting row's versions take a line of their own, and a row's status shows only as its icon, with
-the status as the icon's tooltip. On a wide card a waiting row's versions sit beside its name, next to the install
-button.
+the status as the icon's tooltip. Wider, a waiting row's versions sit beside its name, next to the install button,
+whenever every waiting row's name and versions fit side by side on one line, and under the name otherwise.
 
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-light.png#gh-light-mode-only" width="250" alt="The queue on a narrow card, a group of services updating with its spinning icon and its long versions on a line of their own under its name">
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/narrow-dark.png#gh-dark-mode-only" width="250" alt="The queue on a narrow card, a group of services updating with its spinning icon and its long versions on a line of their own under its name">

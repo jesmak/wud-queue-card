@@ -1226,6 +1226,7 @@ var FIRST_ROW_PX = [
 ];
 var DOCKER_EPOCH = Date.UTC(2013, 0, 1);
 var px = (value) => parseFloat(value) || 0;
+var SLACK_PX = 0.01;
 var CARD_PARTS = [".hd", ".hd-sub", ".bar", ".list", ".idle", ".message"].map((part) => `:scope > ${part}`).join(", ");
 function listEndHeight(list) {
   const style = getComputedStyle(list);
@@ -1262,6 +1263,7 @@ var WudQueueCard = class extends i4 {
     this.filled = 0;
     this.spare = 0;
     this.width = 0;
+    this.beside = false;
     this.resizes = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(() => this.measureSoon());
     /** How each remembered install is going, worked out once per update. */
     this.followed = /* @__PURE__ */ new Map();
@@ -1350,7 +1352,59 @@ var WudQueueCard = class extends i4 {
   }
   measureSoon() {
     cancelAnimationFrame(this.frame ?? 0);
-    this.frame = requestAnimationFrame(() => this.fillRows());
+    this.frame = requestAnimationFrame(() => {
+      this.measureBeside();
+      this.fillRows();
+    });
+  }
+  /**
+   * Puts the waiting rows' versions beside their names only when they fit there: when a name's longest word, the gap and
+   * the whole version fit in the row's texts, and no row is taller than with its version under its name. Then every
+   * waiting row, a shut section's included, so the list keeps one layout. The list is held to its drawn height meanwhile,
+   * its overflow clipped, so nothing around it moves, and a section that scrolls is put back where it was.
+   */
+  measureBeside() {
+    const card = this.renderRoot.querySelector("ha-card");
+    const list = card?.querySelector(":scope > .list");
+    const infos = list ? [...list.querySelectorAll(".row.unit > .info")] : [];
+    if (!card || !list?.clientWidth || infos.length === 0) {
+      if (this.beside && card?.clientWidth) {
+        this.beside = false;
+      }
+      return;
+    }
+    const heights = () => infos.map((info) => px(getComputedStyle(info).height));
+    const was = card.classList.contains("beside");
+    const scrollers = [...list.querySelectorAll(".scroll")].map((scroll) => [scroll, scroll.scrollTop]);
+    list.style.height = `${Math.round(px(getComputedStyle(list).height) * 64) / 64}px`;
+    list.style.overflow = "hidden";
+    list.style.overflowAnchor = "none";
+    card.classList.remove("beside");
+    const under = heights();
+    card.classList.add("beside");
+    const sideBySide = heights();
+    card.classList.add("measuring");
+    const fits = infos.every((info, i5) => {
+      const style = getComputedStyle(info);
+      if (style.display !== "flex") {
+        return false;
+      }
+      const parts = [...info.children].reduce((sum, part) => sum + px(getComputedStyle(part).width), 0);
+      return parts + px(style.columnGap) <= px(style.width) + SLACK_PX && sideBySide[i5] <= under[i5] + SLACK_PX;
+    });
+    card.classList.remove("measuring");
+    card.classList.toggle("beside", was);
+    list.style.height = "";
+    list.style.overflow = "";
+    list.style.overflowAnchor = "";
+    for (const [scroll, top] of scrollers) {
+      if (scroll.scrollTop !== top) {
+        scroll.scrollTop = top;
+      }
+    }
+    if (fits !== this.beside) {
+      this.beside = fits;
+    }
   }
   /**
    * In a sections view whose rows are left automatic, the card takes the whole rows its content needs, or the half rows
@@ -1400,7 +1454,7 @@ var WudQueueCard = class extends i4 {
   }
   /** The card's classes: held to a height, its texts above the open section keep to one line, and a slide moves its rows along. */
   cardClass() {
-    return [this.heightStyle() && "held", this.sliding && "sliding"].filter(Boolean).join(" ");
+    return [this.heightStyle() && "held", this.sliding && "sliding", this.beside && "beside"].filter(Boolean).join(" ");
   }
   /** Whether the card is held to a height that is set, fixed or in rows, and so may have room left under its content. */
   setHeight() {
@@ -2382,6 +2436,11 @@ var WudQueueCard = class extends i4 {
                     margin-bottom: 8px;
                 }
 
+                /* Its rows are measured the same whether it scrolls or not. */
+                .held .scroll {
+                    scrollbar-gutter: stable;
+                }
+
                 .held .list > .fold.open:last-child .scroll {
                     padding-bottom: 0;
                 }
@@ -2453,22 +2512,39 @@ var WudQueueCard = class extends i4 {
                     transition: margin var(--ha-animation-duration-normal, 250ms) ease;
                 }
 
-                /* A wide card has room for a waiting row's versions beside its name, next to the button. */
-                @container (min-width: 600px) {
-                    .row:not(.sib, .proj-head) .info {
+                /*
+                 * A waiting row's versions go beside its name, next to the button, when every waiting row's fit there, as
+                 * measured, on one line. Its name wraps between words only, as its longest word was measured to fit. A narrow
+                 * card keeps its own layout.
+                 */
+                @container (width > 300px) {
+                    .beside .row.unit > .info {
                         display: flex;
                         align-items: baseline;
                         justify-content: space-between;
                         gap: 16px;
                     }
 
-                    .row:not(.sib, .proj-head) .sub {
-                        text-align: right;
+                    .beside .row.unit > .info > .name {
+                        overflow-wrap: break-word;
+                    }
+
+                    .beside .row.unit > .info > .ver {
+                        flex: none;
+                        white-space: nowrap;
+                        text-align: end;
                     }
 
                     /* Up-to-date siblings line their version up with the waiting rows', left of the buttons. */
-                    .row.sib .end {
+                    .beside .pending .row.sib .end {
                         margin-right: 40px;
+                    }
+
+                    /* Measuring: each name at its longest word, never broken inside one, beside its whole version. */
+                    .measuring .row.unit > .info > .name {
+                        flex: none;
+                        width: min-content;
+                        overflow-wrap: normal;
                     }
                 }
 
@@ -2521,6 +2597,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], WudQueueCard.prototype, "width", 2);
+__decorateClass([
+  r5()
+], WudQueueCard.prototype, "beside", 2);
 WudQueueCard = __decorateClass([
   t3("wud-queue-card")
 ], WudQueueCard);

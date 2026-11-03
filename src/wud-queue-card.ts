@@ -90,6 +90,12 @@ const DOCKER_EPOCH = Date.UTC(2013, 0, 1);
 
 const px = (value: string) => parseFloat(value) || 0;
 
+/**
+ * Room for a measure read in fractions of a pixel, so a text exactly as wide as its room still fits. Smaller than the
+ * 1/64 px a browser lays out in.
+ */
+const SLACK_PX = 0.01;
+
 /** The parts the card itself puts in its ha-card, one after another. */
 const CARD_PARTS = [".hd", ".hd-sub", ".bar", ".list", ".idle", ".message"].map((part) => `:scope > ${part}`).join(", ");
 
@@ -153,6 +159,8 @@ export class WudQueueCard extends LitElement {
     @state() private spare = 0;
     /** The card's width when last measured, 0 before it is drawn. */
     @state() private width = 0;
+    /** As last measured, whether the waiting rows' versions fit beside their names. */
+    @state() private beside = false;
     private frame?: number;
     private readonly resizes = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => this.measureSoon());
     /** How each remembered install is going, worked out once per update. */
@@ -257,7 +265,64 @@ export class WudQueueCard extends LitElement {
 
     private measureSoon(): void {
         cancelAnimationFrame(this.frame ?? 0);
-        this.frame = requestAnimationFrame(() => this.fillRows());
+        this.frame = requestAnimationFrame(() => {
+            this.measureBeside();
+            this.fillRows();
+        });
+    }
+
+    /**
+     * Puts the waiting rows' versions beside their names only when they fit there: when a name's longest word, the gap and
+     * the whole version fit in the row's texts, and no row is taller than with its version under its name. Then every
+     * waiting row, a shut section's included, so the list keeps one layout. The list is held to its drawn height meanwhile,
+     * its overflow clipped, so nothing around it moves, and a section that scrolls is put back where it was.
+     */
+    private measureBeside(): void {
+        const card = this.renderRoot.querySelector<HTMLElement>("ha-card");
+        const list = card?.querySelector<HTMLElement>(":scope > .list");
+        const infos = list ? [...list.querySelectorAll<HTMLElement>(".row.unit > .info")] : [];
+        if (!card || !list?.clientWidth || infos.length === 0) {
+            if (this.beside && card?.clientWidth) {
+                this.beside = false;
+            }
+            return;
+        }
+        const heights = (): number[] => infos.map((info) => px(getComputedStyle(info).height));
+        const was = card.classList.contains("beside");
+        const scrollers = [...list.querySelectorAll<HTMLElement>(".scroll")].map((scroll) => [scroll, scroll.scrollTop] as const);
+        // A computed height has six significant digits, which can fall short of the 1/64 px a browser lays out in, and the
+        // list held to that would shrink by a fraction while it is measured. So it is held to the 1/64 px it rounds to.
+        list.style.height = `${Math.round(px(getComputedStyle(list).height) * 64) / 64}px`;
+        list.style.overflow = "hidden";
+        list.style.overflowAnchor = "none";
+        card.classList.remove("beside");
+        const under = heights();
+        card.classList.add("beside");
+        const sideBySide = heights();
+        card.classList.add("measuring");
+        // A narrow card's rows lay their texts out on a grid of their own, with no box for the texts to measure.
+        const fits = infos.every((info, i) => {
+            const style = getComputedStyle(info);
+            if (style.display !== "flex") {
+                return false;
+            }
+            const parts = [...info.children].reduce((sum, part) => sum + px(getComputedStyle(part).width), 0);
+            return parts + px(style.columnGap) <= px(style.width) + SLACK_PX && sideBySide[i] <= under[i] + SLACK_PX;
+        });
+        card.classList.remove("measuring");
+        card.classList.toggle("beside", was);
+        list.style.height = "";
+        list.style.overflow = "";
+        list.style.overflowAnchor = "";
+        // Rows measured shorter shrink what a section can scroll, and the browser pulls a section scrolled deep back up.
+        for (const [scroll, top] of scrollers) {
+            if (scroll.scrollTop !== top) {
+                scroll.scrollTop = top;
+            }
+        }
+        if (fits !== this.beside) {
+            this.beside = fits;
+        }
     }
 
     /**
@@ -314,7 +379,7 @@ export class WudQueueCard extends LitElement {
 
     /** The card's classes: held to a height, its texts above the open section keep to one line, and a slide moves its rows along. */
     private cardClass(): string {
-        return [this.heightStyle() && "held", this.sliding && "sliding"].filter(Boolean).join(" ");
+        return [this.heightStyle() && "held", this.sliding && "sliding", this.beside && "beside"].filter(Boolean).join(" ");
     }
 
     /** Whether the card is held to a height that is set, fixed or in rows, and so may have room left under its content. */
@@ -1412,6 +1477,11 @@ export class WudQueueCard extends LitElement {
                     margin-bottom: 8px;
                 }
 
+                /* Its rows are measured the same whether it scrolls or not. */
+                .held .scroll {
+                    scrollbar-gutter: stable;
+                }
+
                 .held .list > .fold.open:last-child .scroll {
                     padding-bottom: 0;
                 }
@@ -1483,22 +1553,39 @@ export class WudQueueCard extends LitElement {
                     transition: margin var(--ha-animation-duration-normal, 250ms) ease;
                 }
 
-                /* A wide card has room for a waiting row's versions beside its name, next to the button. */
-                @container (min-width: 600px) {
-                    .row:not(.sib, .proj-head) .info {
+                /*
+                 * A waiting row's versions go beside its name, next to the button, when every waiting row's fit there, as
+                 * measured, on one line. Its name wraps between words only, as its longest word was measured to fit. A narrow
+                 * card keeps its own layout.
+                 */
+                @container (width > 300px) {
+                    .beside .row.unit > .info {
                         display: flex;
                         align-items: baseline;
                         justify-content: space-between;
                         gap: 16px;
                     }
 
-                    .row:not(.sib, .proj-head) .sub {
-                        text-align: right;
+                    .beside .row.unit > .info > .name {
+                        overflow-wrap: break-word;
+                    }
+
+                    .beside .row.unit > .info > .ver {
+                        flex: none;
+                        white-space: nowrap;
+                        text-align: end;
                     }
 
                     /* Up-to-date siblings line their version up with the waiting rows', left of the buttons. */
-                    .row.sib .end {
+                    .beside .pending .row.sib .end {
                         margin-right: 40px;
+                    }
+
+                    /* Measuring: each name at its longest word, never broken inside one, beside its whole version. */
+                    .measuring .row.unit > .info > .name {
+                        flex: none;
+                        width: min-content;
+                        overflow-wrap: normal;
                     }
                 }
 
