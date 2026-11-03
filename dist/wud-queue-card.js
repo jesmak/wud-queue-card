@@ -1242,7 +1242,13 @@ var WudQueueCard = class extends i4 {
     /** The projects to show, worked out once per update. */
     this.projectList = [];
     this.slid = (event) => {
-      if (event.propertyName === "grid-template-rows" && event.target === event.currentTarget) {
+      if (event.propertyName !== "grid-template-rows" || event.target !== event.currentTarget) {
+        return;
+      }
+      const moving = [...this.renderRoot.querySelectorAll(".fold")].some(
+        (fold) => fold !== event.currentTarget && (fold.getAnimations?.().length ?? 0) > 0
+      );
+      if (!moving) {
         window.clearTimeout(this.slideTimer);
         this.sliding = false;
       }

@@ -190,6 +190,27 @@ describe("the two sections", () => {
         expect(list.querySelector(".fold.open > .fold-in > .scroll.pending")).not.toBeNull();
     });
 
+    it("keeps sliding while the other section still slides, and lets go once the last one ends", async () => {
+        const element = await card(hass());
+        const isSliding = () => shadow(element).querySelector("ha-card")!.classList.contains("sliding");
+        const end = (fold: HTMLElement) => {
+            const event = new Event("transitionend") as TransitionEvent;
+            Object.defineProperty(event, "propertyName", { value: "grid-template-rows" });
+            fold.dispatchEvent(event);
+        };
+        visible<HTMLButtonElement>(shadow(element), "button.switch")[0].click();
+        await element.updateComplete;
+        const [first, other] = shadow(element).querySelectorAll<HTMLElement>(".fold");
+        other!.getAnimations = () => [{}] as Animation[];
+        end(first!);
+        await element.updateComplete;
+        expect(isSliding()).toBe(true);
+        other!.getAnimations = () => [];
+        end(other!);
+        await element.updateComplete;
+        expect(isSliding()).toBe(false);
+    });
+
     it("lets the open section scroll again when the card comes back after leaving the page mid-slide", async () => {
         const element = await card(hass());
         visible<HTMLButtonElement>(shadow(element), "button.switch")[0].click();
