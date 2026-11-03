@@ -330,6 +330,25 @@ describe("the room under the one line while nothing waits", () => {
         expect(one(element, ".list")!.classList.contains("shut")).toBe(idle);
     });
 
+    it("makes the check under its line large only while the room fits it with its lines", async () => {
+        const element = await card(hass(quiet([])), { height: 300 });
+        const idle = one(element, ".idle") as HTMLElement;
+        const lines = one(element, ".idle-lines") as HTMLElement;
+        lines.style.height = "40px";
+        const style = getComputedStyle(idle);
+        const extra = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.rowGap) || 0);
+        const large = async (room: number) => {
+            Object.defineProperty(idle, "clientHeight", { value: room + extra, configurable: true });
+            element["measureIdle"]();
+            await element.updateComplete;
+            return one(element, ".idle-icon")!.classList.contains("large");
+        };
+        // 100 px of check, 20 px under it and 40 px of lines
+        expect(await large(160)).toBe(true);
+        expect(await large(159)).toBe(false);
+        expect(await large(200)).toBe(true);
+    });
+
     const NOW = Date.parse("2026-11-02T12:00:00Z");
     const ago = (days: number) => new Date(NOW - days * 86_400_000).toISOString();
     /** A container without compose, up to date, with its image built `created`. */

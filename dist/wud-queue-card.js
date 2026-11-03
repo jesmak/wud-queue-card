@@ -1197,6 +1197,7 @@ var FIRST_ROW_PX = [
 var DOCKER_EPOCH = Date.UTC(2013, 0, 1);
 var px = (value) => parseFloat(value) || 0;
 var SLACK_PX = 0.01;
+var LARGE_CHECK_PX = 120;
 var CARD_PARTS = [".hd", ".hd-sub", ".bar", ".list", ".idle", ".message"].map((part) => `:scope > ${part}`).join(", ");
 function listEndHeight(list) {
   const style = getComputedStyle(list);
@@ -1236,6 +1237,7 @@ var WudQueueCard = class extends i4 {
     this.spare = 0;
     this.width = 0;
     this.beside = false;
+    this.largeCheck = false;
     this.resizes = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(() => this.measureSoon());
     /** How each remembered install is going, worked out once per update. */
     this.followed = /* @__PURE__ */ new Map();
@@ -1332,8 +1334,27 @@ var WudQueueCard = class extends i4 {
     cancelAnimationFrame(this.frame ?? 0);
     this.frame = requestAnimationFrame(() => {
       this.measureBeside();
+      this.measureIdle();
       this.fillRows();
     });
+  }
+  /**
+   * Held to a set height with nothing waiting, the check under the line is the large one when the room fits it with its
+   * lines, so the room doesn't scroll for it. The room's height comes from the card and the lines' from its width, so
+   * neither changes with the check's size and the choice can't flip back and forth.
+   */
+  measureIdle() {
+    const idle = this.renderRoot.querySelector("ha-card > .idle");
+    const lines = idle?.querySelector(":scope > .idle-lines");
+    if (!idle?.clientHeight || !lines) {
+      return;
+    }
+    const style = getComputedStyle(idle);
+    const room = idle.clientHeight - px(style.paddingTop) - px(style.paddingBottom);
+    const large = LARGE_CHECK_PX + px(style.rowGap) + px(getComputedStyle(lines).height) <= room + SLACK_PX;
+    if (large !== this.largeCheck) {
+      this.largeCheck = large;
+    }
   }
   /**
    * Puts the waiting rows' versions beside their names only when they fit there: when a name's longest word, the gap and
@@ -1589,7 +1610,7 @@ var WudQueueCard = class extends i4 {
       lines.push({ icon: "mdi:stop-circle-outline", text: this.count("not_running", stopped) });
     }
     return b2`<div class="idle">
-            <ha-icon class="idle-icon" icon="mdi:check-circle-outline"></ha-icon>
+            <ha-icon class="idle-icon ${this.largeCheck ? "large" : ""}" icon="mdi:check-circle-outline"></ha-icon>
             <div class="idle-lines">
                 ${lines.map(
       ({ icon, text: text2 }) => b2`<div class="idle-line"><ha-icon icon=${icon}></ha-icon><span title=${text2}>${text2}</span></div>`
@@ -2451,6 +2472,12 @@ var WudQueueCard = class extends i4 {
                     opacity: 0.5;
                 }
 
+                /* When the room fits it with its lines. Its size and the room under it add up to LARGE_CHECK_PX. */
+                .idle-icon.large {
+                    --mdc-icon-size: 100px;
+                    margin-bottom: 20px;
+                }
+
                 /* The lines are centred as one block, so their icons line up. */
                 .idle-lines {
                     display: flex;
@@ -2577,6 +2604,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], WudQueueCard.prototype, "beside", 2);
+__decorateClass([
+  r5()
+], WudQueueCard.prototype, "largeCheck", 2);
 WudQueueCard = __decorateClass([
   t3("wud-queue-card")
 ], WudQueueCard);
