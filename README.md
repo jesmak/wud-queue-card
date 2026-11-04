@@ -3,7 +3,7 @@
 Home Assistant dashboard card for What's Up Docker's container updates, grouped by compose project, with an install
 button on each row, and a queue that installs them one at a time with the WUD Queue integration.
 
-[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![HACS][hacs-shield]][hacs] [![License][license-shield]](LICENSE)
+[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
 
 <p>
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/waiting-light.png#gh-light-mode-only" width="400" alt="Four containers waiting for an update, a compose project's services grouped under its name with their old and new versions and an install button on each">
@@ -34,10 +34,10 @@ open dashboard shows the same queue. The integration is optional. The card finds
 
 ## Installation
 
-### With HACS
+### With the Marketplace
 
-1. Add this repository to HACS custom repositories with type **Dashboard**
-2. Search for WUD Queue card in HACS and download it
+1. Open Settings › Marketplace, choose Add from link and paste `https://github.com/jesmak/wud-queue-card`
+2. Open WUD Queue card in the Marketplace and choose Install
 3. Refresh your browser
 
 ### Manual
@@ -246,7 +246,7 @@ npm run check
 ```
 
 `npm run check` typechecks, lints, checks formatting, runs the tests and builds `dist/wud-queue-card.js`, which is
-the file HACS installs and is committed to the repository.
+the file the Marketplace installs and is committed to the repository.
 
 | Path                       | What it contains                                                              |
 | -------------------------- | ----------------------------------------------------------------------------- |
@@ -278,6 +278,6 @@ MIT, see [LICENSE](LICENSE).
 [releases-shield]: https://img.shields.io/github/release/jesmak/wud-queue-card.svg?style=for-the-badge
 [release-date-shield]: https://img.shields.io/github/release-date/jesmak/wud-queue-card?style=for-the-badge
 [releases]: https://github.com/jesmak/wud-queue-card/releases
-[hacs-shield]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
-[hacs]: https://hacs.xyz/docs/faq/custom_repositories/
+[marketplace-shield]: https://img.shields.io/badge/Marketplace-Custom-orange.svg?style=for-the-badge
+[marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=jesmak&repository=wud-queue-card&category=plugin
 [license-shield]: https://img.shields.io/github/license/jesmak/wud-queue-card.svg?style=for-the-badge
