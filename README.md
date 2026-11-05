@@ -3,7 +3,7 @@
 Home Assistant dashboard card for What's Up Docker's container updates, grouped by compose project, with an install
 button on each row, and a queue that installs them one at a time with the WUD Queue integration.
 
-[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
+[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Downloads][downloads-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
 
 <p>
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/waiting-light.png#gh-light-mode-only" width="400" alt="Four containers waiting for an update, a compose project's services grouped under its name with their old and new versions and an install button on each">
@@ -279,6 +279,7 @@ MIT, see [LICENSE](LICENSE).
 [releases-shield]: https://img.shields.io/github/release/jesmak/wud-queue-card.svg?style=for-the-badge
 [release-date-shield]: https://img.shields.io/github/release-date/jesmak/wud-queue-card?style=for-the-badge
 [releases]: https://github.com/jesmak/wud-queue-card/releases
+[downloads-shield]: https://img.shields.io/github/downloads/jesmak/wud-queue-card/total.svg?style=for-the-badge
 [marketplace-shield]: https://img.shields.io/badge/Marketplace-Default-green.svg?style=for-the-badge
 [marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=jesmak&repository=wud-queue-card&category=plugin
 [license-shield]: https://img.shields.io/github/license/jesmak/wud-queue-card.svg?style=for-the-badge
