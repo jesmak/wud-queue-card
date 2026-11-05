@@ -1333,34 +1333,35 @@ var WudQueueCard = class extends i4 {
   measureSoon() {
     cancelAnimationFrame(this.frame ?? 0);
     this.frame = requestAnimationFrame(() => {
-      this.measureBeside();
-      this.measureIdle();
-      this.fillRows();
+      if (this.measureBeside() && this.measureIdle()) {
+        this.fillRows();
+      }
     });
   }
   /**
    * Held to a set height with nothing waiting, the check under the line is the large one when the room fits it with its
    * lines, so the room doesn't scroll for it. The room's height comes from the card and the lines' from its width, so
-   * neither changes with the check's size and the choice can't flip back and forth.
+   * neither changes with the check's size and the choice can't flip back and forth. Returns false when the layout changed.
    */
   measureIdle() {
     const idle = this.renderRoot.querySelector("ha-card > .idle");
     const lines = idle?.querySelector(":scope > .idle-lines");
     if (!idle?.clientHeight || !lines) {
-      return;
+      return true;
     }
     const style = getComputedStyle(idle);
     const room = idle.clientHeight - px(style.paddingTop) - px(style.paddingBottom);
     const large = LARGE_CHECK_PX + px(style.rowGap) + px(getComputedStyle(lines).height) <= room + SLACK_PX;
-    if (large !== this.largeCheck) {
-      this.largeCheck = large;
-    }
+    if (large === this.largeCheck) return true;
+    this.largeCheck = large;
+    return false;
   }
   /**
    * Puts the waiting rows' versions beside their names only when they fit there: when a name's longest word, the gap and
    * the whole version fit in the row's texts, and no row is taller than with its version under its name. Then every
    * waiting row, a shut section's included, so the list keeps one layout. The list is held to its drawn height meanwhile,
    * its overflow clipped, so nothing around it moves, and a section that scrolls is put back where it was.
+   * Returns false when the layout changed.
    */
   measureBeside() {
     const card = this.renderRoot.querySelector("ha-card");
@@ -1370,7 +1371,7 @@ var WudQueueCard = class extends i4 {
       if (this.beside && card?.clientWidth) {
         this.beside = false;
       }
-      return;
+      return true;
     }
     const heights = () => infos.map((info) => px(getComputedStyle(info).height));
     const was = card.classList.contains("beside");
@@ -1401,9 +1402,9 @@ var WudQueueCard = class extends i4 {
         scroll.scrollTop = top;
       }
     }
-    if (fits !== this.beside) {
-      this.beside = fits;
-    }
+    if (fits === this.beside) return true;
+    this.beside = fits;
+    return false;
   }
   /**
    * In a sections view whose rows are left automatic, the card takes the whole rows its content needs, or the half rows
@@ -1924,6 +1925,8 @@ var WudQueueCard = class extends i4 {
              * title and the section lines keep their place and the open section scrolls in what is left.
              */
                 ha-card {
+                    /* ha-card's own transition covers every property, so a change in the rows filled would animate. Only a slide does. */
+                    transition: none;
                     box-sizing: border-box;
                     display: flex;
                     flex-direction: column;
