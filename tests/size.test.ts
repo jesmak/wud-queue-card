@@ -73,14 +73,15 @@ interface Box {
     children?: Box[];
 }
 
-function build(box: Box): HTMLElement {
+/** Builds the boxes drawn at `scale`, as a dialog opening draws the card, their margins and paddings in the layout's pixels. */
+function build(box: Box, scale = 1): HTMLElement {
     const element = document.createElement("div");
     element.className = box.className ?? "";
     element.style.cssText = box.style ?? "";
-    const top = box.top ?? 0;
-    element.getBoundingClientRect = () => ({ top, bottom: top + box.height, height: box.height }) as DOMRect;
+    const top = (box.top ?? 0) * scale;
+    element.getBoundingClientRect = () => ({ top, bottom: top + box.height * scale, height: box.height * scale }) as DOMRect;
     for (const child of box.children ?? []) {
-        element.append(build(child));
+        element.append(build(child, scale));
     }
     return element;
 }
@@ -128,6 +129,10 @@ describe("the height the list ends at once its sections have slid", () => {
         const list = build({ style: "padding-top: 6px", height: 0, children });
         document.body.append(list);
         expect(listEndHeight(list)).toBe(height);
+        // The same in the layout's pixels when drawn scaled.
+        const scaled = build({ style: "padding-top: 6px", height: 0, children }, 0.8);
+        document.body.append(scaled);
+        expect(listEndHeight(scaled, 0.8)).toBeCloseTo(height, 9);
     });
 });
 

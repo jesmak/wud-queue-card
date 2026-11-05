@@ -32,7 +32,7 @@ import { ScrollFade, fadeStyles } from "./fade";
 import type { HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
-import { fillLimit, filledHeight, filledStyle, validRowStep } from "./rows";
+import { drawnScale, fillLimit, filledHeight, filledStyle, spareRoom, validRowStep } from "./rows";
 import type { Container, Project, Queue, Unit, WudQueueCardConfig } from "./types";
 
 console.info(
@@ -91,21 +91,10 @@ const DOCKER_EPOCH = Date.UTC(2013, 0, 1);
 const px = (value: string) => parseFloat(value) || 0;
 
 /**
- * Room for a measure read in fractions of a pixel, so a text exactly as wide as its room still fits, and a content
- * unscaled with floating-point noise counts as the whole pixels it is. Smaller than the 1/64 px a browser lays out in.
+ * Room for a measure read in fractions of a pixel, so a text exactly as wide as its room still fits. Smaller than the
+ * 1/64 px a browser lays out in.
  */
 const SLACK_PX = 0.01;
-
-/**
- * How much the card is drawn scaled, 1 unless something scales it, such as a dialog's opening animation (0.8 to 1).
- * Drawn sizes are scaled while the card's padding and margins are not, so drawn measures are divided by it. A scale
- * doesn't resize the card, so no ResizeObserver would correct a measure made mid-scale.
- */
-function drawnScale(card: HTMLElement): number {
-    const layout = px(getComputedStyle(card).width);
-    const drawn = card.getBoundingClientRect().width;
-    return layout > 0 && drawn > 0 ? drawn / layout : 1;
-}
 
 /** The large check under a held card's one line and the room under it, as in its styles: 100 px and 20 px. */
 const LARGE_CHECK_PX = 120;
@@ -404,10 +393,8 @@ export class WudQueueCard extends LitElement {
         // The spare room as drawn now, which while a slide goes on is somewhere between the old and the new.
         const list = card.querySelector<HTMLElement>(":scope > .list, :scope > .message");
         content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
-        // Up to the whole pixel, so a content a fraction over, such as 120.4, still ends inside the rows. The slack keeps
-        // noise from unscaling mid-scale from costing a pixel either way.
-        const filled = filledHeight(Math.ceil(content - SLACK_PX), this.config ?? {}, limit);
-        const spare = Math.max(0, Math.floor(filled - content + SLACK_PX));
+        const filled = filledHeight(content, this.config ?? {}, limit);
+        const spare = spareRoom(filled, content);
         if (filled !== this.filled) {
             this.filled = filled;
         }
@@ -1575,19 +1562,20 @@ export class WudQueueCard extends LitElement {
                     margin-bottom: 20px;
                 }
 
-                /* The lines are centred as one block, so their icons line up. */
+                /* Each line is centred on its own, under the check. */
                 .idle-lines {
                     display: flex;
                     flex-direction: column;
+                    align-items: center;
                     gap: 4px;
                     min-width: 0;
                     max-width: 100%;
                 }
 
-                /* A line wraps rather than cut short, its icon by its first line, as the room scrolls when they don't fit. */
+                /* A line wraps rather than cut short, as the room scrolls when they don't fit, its icon centred on its text. */
                 .idle-line {
                     display: flex;
-                    align-items: flex-start;
+                    align-items: center;
                     gap: 6px;
                     max-width: 100%;
                     font-size: 12px;

@@ -1,4 +1,4 @@
-/*! wud-queue-card 1.1.0 | MIT License */
+/*! wud-queue-card 1.1.1 | MIT License */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -604,7 +604,7 @@ function r5(r6) {
 }
 
 // src/const.ts
-var CARD_VERSION = "1.1.0";
+var CARD_VERSION = "1.1.1";
 var START_TIMEOUT = 6e4;
 var VERSION_GRACE = 12e4;
 var DONE_KEEP = 6e5;
@@ -953,8 +953,17 @@ function validRowStep(config) {
   return config.row_step === void 0 || config.row_step === null || ROW_STEPS.includes(config.row_step);
 }
 var step = (config) => config.row_step === "half" ? ROW_PX / 2 : ROW_PX;
+var SLACK_PX = 0.01;
+function drawnScale(card) {
+  const layout = Number.parseFloat(getComputedStyle(card).width) || 0;
+  const drawn = card.getBoundingClientRect().width;
+  return layout > 0 && drawn > 0 ? drawn / layout : 1;
+}
 function filledHeight(content, config, limit = Infinity) {
-  return Math.min(Math.max(1, Math.ceil((content + ROW_GAP_PX) / step(config))) * step(config) - ROW_GAP_PX, limit);
+  return Math.min(Math.max(1, Math.ceil((content - SLACK_PX + ROW_GAP_PX) / step(config))) * step(config) - ROW_GAP_PX, limit);
+}
+function spareRoom(filled, content) {
+  return Math.max(0, Math.floor(filled - content + SLACK_PX));
 }
 function fillLimit(config, layout, minimum = 0) {
   const rows = config.grid_options ? config.grid_options.rows : config.layout_options?.grid_rows;
@@ -1196,12 +1205,7 @@ var FIRST_ROW_PX = [
 ];
 var DOCKER_EPOCH = Date.UTC(2013, 0, 1);
 var px = (value) => parseFloat(value) || 0;
-var SLACK_PX = 0.01;
-function drawnScale(card) {
-  const layout = px(getComputedStyle(card).width);
-  const drawn = card.getBoundingClientRect().width;
-  return layout > 0 && drawn > 0 ? drawn / layout : 1;
-}
+var SLACK_PX2 = 0.01;
 var LARGE_CHECK_PX = 120;
 var CARD_PARTS = [".hd", ".hd-sub", ".bar", ".list", ".idle", ".message"].map((part) => `:scope > ${part}`).join(", ");
 function listEndHeight(list, scale = 1) {
@@ -1356,7 +1360,7 @@ var WudQueueCard = class extends i4 {
     }
     const style = getComputedStyle(idle);
     const room = idle.clientHeight - px(style.paddingTop) - px(style.paddingBottom);
-    const large = LARGE_CHECK_PX + px(style.rowGap) + px(getComputedStyle(lines).height) <= room + SLACK_PX;
+    const large = LARGE_CHECK_PX + px(style.rowGap) + px(getComputedStyle(lines).height) <= room + SLACK_PX2;
     if (large === this.largeCheck) return true;
     this.largeCheck = large;
     return false;
@@ -1395,7 +1399,7 @@ var WudQueueCard = class extends i4 {
         return false;
       }
       const parts = [...info.children].reduce((sum, part) => sum + px(getComputedStyle(part).width), 0);
-      return parts + px(style.columnGap) <= px(style.width) + SLACK_PX && sideBySide[i5] <= under[i5] + SLACK_PX;
+      return parts + px(style.columnGap) <= px(style.width) + SLACK_PX2 && sideBySide[i5] <= under[i5] + SLACK_PX2;
     });
     card.classList.remove("measuring");
     card.classList.toggle("beside", was);
@@ -1443,8 +1447,8 @@ var WudQueueCard = class extends i4 {
     }
     const list = card.querySelector(":scope > .list, :scope > .message");
     content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
-    const filled = filledHeight(Math.ceil(content - SLACK_PX), this.config ?? {}, limit);
-    const spare = Math.max(0, Math.floor(filled - content + SLACK_PX));
+    const filled = filledHeight(content, this.config ?? {}, limit);
+    const spare = spareRoom(filled, content);
     if (filled !== this.filled) {
       this.filled = filled;
     }
@@ -2487,19 +2491,20 @@ var WudQueueCard = class extends i4 {
                     margin-bottom: 20px;
                 }
 
-                /* The lines are centred as one block, so their icons line up. */
+                /* Each line is centred on its own, under the check. */
                 .idle-lines {
                     display: flex;
                     flex-direction: column;
+                    align-items: center;
                     gap: 4px;
                     min-width: 0;
                     max-width: 100%;
                 }
 
-                /* A line wraps rather than cut short, its icon by its first line, as the room scrolls when they don't fit. */
+                /* A line wraps rather than cut short, as the room scrolls when they don't fit, its icon centred on its text. */
                 .idle-line {
                     display: flex;
-                    align-items: flex-start;
+                    align-items: center;
                     gap: 6px;
                     max-width: 100%;
                     font-size: 12px;
