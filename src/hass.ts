@@ -8,7 +8,7 @@ export interface HassEntity {
 }
 
 /** An entity's entry in the registry, as the frontend hands it to cards. */
-export interface HassEntityEntry {
+interface HassEntityEntry {
     entity_id: string;
     device_id?: string | null;
     platform?: string;

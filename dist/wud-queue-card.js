@@ -806,7 +806,7 @@ var en_default = {
   },
   error: {
     service: "Home Assistant did not send the update to What's Up Docker. {message}",
-    start: "What's Up Docker did not start the update within a minute. Is it running?",
+    start: "What's Up Docker did not start the update. Is it running?",
     version: "The update ended, but the container is still on {version}. Check What's Up Docker's logs.",
     timeout: "The update did not finish within half an hour. Check What's Up Docker's logs."
   },
@@ -869,7 +869,7 @@ var fi_default = {
   },
   error: {
     service: "Home Assistant ei v\xE4litt\xE4nyt p\xE4ivityst\xE4 What's Up Dockerille. {message}",
-    start: "What's Up Docker ei aloittanut p\xE4ivityst\xE4 minuutissa. Onko se k\xE4ynniss\xE4?",
+    start: "What's Up Docker ei aloittanut p\xE4ivityst\xE4. Onko se k\xE4ynniss\xE4?",
     version: "P\xE4ivitys p\xE4\xE4ttyi, mutta kontti on yh\xE4 versiossa {version}. Tarkista What's Up Dockerin lokit.",
     timeout: "P\xE4ivitys ei valmistunut puolessa tunnissa. Tarkista What's Up Dockerin lokit."
   },
@@ -1197,9 +1197,14 @@ var FIRST_ROW_PX = [
 var DOCKER_EPOCH = Date.UTC(2013, 0, 1);
 var px = (value) => parseFloat(value) || 0;
 var SLACK_PX = 0.01;
+function drawnScale(card) {
+  const layout = px(getComputedStyle(card).width);
+  const drawn = card.getBoundingClientRect().width;
+  return layout > 0 && drawn > 0 ? drawn / layout : 1;
+}
 var LARGE_CHECK_PX = 120;
 var CARD_PARTS = [".hd", ".hd-sub", ".bar", ".list", ".idle", ".message"].map((part) => `:scope > ${part}`).join(", ");
-function listEndHeight(list) {
+function listEndHeight(list, scale = 1) {
   const style = getComputedStyle(list);
   let height = px(style.paddingTop) + px(style.paddingBottom);
   for (const child of list.children) {
@@ -1207,7 +1212,7 @@ function listEndHeight(list) {
     const partStyle = getComputedStyle(part);
     const margins = px(partStyle.marginTop) + px(partStyle.marginBottom);
     if (!part.classList.contains("fold")) {
-      height += margins + part.getBoundingClientRect().height;
+      height += margins + part.getBoundingClientRect().height / scale;
       continue;
     }
     const inner = part.firstElementChild;
@@ -1217,7 +1222,7 @@ function listEndHeight(list) {
       continue;
     }
     const contentStyle = getComputedStyle(content);
-    height += margins + last.getBoundingClientRect().bottom + px(getComputedStyle(last).marginBottom) + px(contentStyle.paddingBottom) - content.getBoundingClientRect().top;
+    height += margins + (last.getBoundingClientRect().bottom - content.getBoundingClientRect().top) / scale + px(getComputedStyle(last).marginBottom) + px(contentStyle.paddingBottom);
   }
   return height;
 }
@@ -1418,7 +1423,8 @@ var WudQueueCard = class extends i4 {
     if (!card || !card.clientWidth) {
       return;
     }
-    const width = Math.round(card.getBoundingClientRect().width);
+    const scale = drawnScale(card);
+    const width = Math.round(card.getBoundingClientRect().width / scale);
     if (width !== this.width) {
       this.width = width;
     }
@@ -1432,13 +1438,13 @@ var WudQueueCard = class extends i4 {
     let content = px(style.borderTopWidth) + px(style.borderBottomWidth) + px(style.paddingTop) + px(style.paddingBottom);
     for (const part of card.querySelectorAll(CARD_PARTS)) {
       const partStyle = getComputedStyle(part);
-      const height = part.classList.contains("list") ? listEndHeight(part) : part.getBoundingClientRect().height;
+      const height = part.classList.contains("list") ? listEndHeight(part, scale) : part.getBoundingClientRect().height / scale;
       content += px(partStyle.marginTop) + height + px(partStyle.marginBottom);
     }
     const list = card.querySelector(":scope > .list, :scope > .message");
     content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
-    const filled = filledHeight(Math.round(content), this.config ?? {}, limit);
-    const spare = Math.max(0, Math.floor(filled - content));
+    const filled = filledHeight(Math.ceil(content - SLACK_PX), this.config ?? {}, limit);
+    const spare = Math.max(0, Math.floor(filled - content + SLACK_PX));
     if (filled !== this.filled) {
       this.filled = filled;
     }

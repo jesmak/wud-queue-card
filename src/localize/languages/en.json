@@ -41,7 +41,7 @@
     },
     "error": {
         "service": "Home Assistant did not send the update to What's Up Docker. {message}",
-        "start": "What's Up Docker did not start the update within a minute. Is it running?",
+        "start": "What's Up Docker did not start the update. Is it running?",
         "version": "The update ended, but the container is still on {version}. Check What's Up Docker's logs.",
         "timeout": "The update did not finish within half an hour. Check What's Up Docker's logs."
     },

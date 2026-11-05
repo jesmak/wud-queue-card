@@ -40,7 +40,7 @@ export function entity(
     };
 }
 
-export function states(list: HassEntity[]): Record<string, HassEntity> {
+function states(list: HassEntity[]): Record<string, HassEntity> {
     return Object.fromEntries(list.map((e) => [e.entity_id, e]));
 }
 

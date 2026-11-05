@@ -91,10 +91,21 @@ const DOCKER_EPOCH = Date.UTC(2013, 0, 1);
 const px = (value: string) => parseFloat(value) || 0;
 
 /**
- * Room for a measure read in fractions of a pixel, so a text exactly as wide as its room still fits. Smaller than the
- * 1/64 px a browser lays out in.
+ * Room for a measure read in fractions of a pixel, so a text exactly as wide as its room still fits, and a content
+ * unscaled with floating-point noise counts as the whole pixels it is. Smaller than the 1/64 px a browser lays out in.
  */
 const SLACK_PX = 0.01;
+
+/**
+ * How much the card is drawn scaled, 1 unless something scales it, such as a dialog's opening animation (0.8 to 1).
+ * Drawn sizes are scaled while the card's padding and margins are not, so drawn measures are divided by it. A scale
+ * doesn't resize the card, so no ResizeObserver would correct a measure made mid-scale.
+ */
+function drawnScale(card: HTMLElement): number {
+    const layout = px(getComputedStyle(card).width);
+    const drawn = card.getBoundingClientRect().width;
+    return layout > 0 && drawn > 0 ? drawn / layout : 1;
+}
 
 /** The large check under a held card's one line and the room under it, as in its styles: 100 px and 20 px. */
 const LARGE_CHECK_PX = 120;
@@ -105,8 +116,9 @@ const CARD_PARTS = [".hd", ".hd-sub", ".bar", ".list", ".idle", ".message"].map(
 /**
  * The list's height once its folds have slid open or shut, so the card is on its rows as a slide begins. A shut fold ends
  * at nothing, an open one at its content, measured from where its last part ends, as its box is clipped while it slides.
+ * Drawn sizes are divided by the card's `scale`, as its paddings and margins are in the layout's pixels.
  */
-export function listEndHeight(list: HTMLElement): number {
+export function listEndHeight(list: HTMLElement, scale = 1): number {
     const style = getComputedStyle(list);
     let height = px(style.paddingTop) + px(style.paddingBottom);
     for (const child of list.children) {
@@ -115,7 +127,7 @@ export function listEndHeight(list: HTMLElement): number {
         // Its own margins too, such as the room a held card keeps under an open section that is the list's last part.
         const margins = px(partStyle.marginTop) + px(partStyle.marginBottom);
         if (!part.classList.contains("fold")) {
-            height += margins + part.getBoundingClientRect().height;
+            height += margins + part.getBoundingClientRect().height / scale;
             continue;
         }
         const inner = part.firstElementChild as HTMLElement | null;
@@ -127,10 +139,9 @@ export function listEndHeight(list: HTMLElement): number {
         const contentStyle = getComputedStyle(content);
         height +=
             margins +
-            last.getBoundingClientRect().bottom +
+            (last.getBoundingClientRect().bottom - content.getBoundingClientRect().top) / scale +
             px(getComputedStyle(last).marginBottom) +
-            px(contentStyle.paddingBottom) -
-            content.getBoundingClientRect().top;
+            px(contentStyle.paddingBottom);
     }
     return height;
 }
@@ -369,8 +380,9 @@ export class WudQueueCard extends LitElement {
         if (!card || !card.clientWidth) {
             return;
         }
-        // The card's whole width, border included, as the widths the columns give are.
-        const width = Math.round(card.getBoundingClientRect().width);
+        const scale = drawnScale(card);
+        // The card's whole width, border included, as the widths the columns give are, unscaled.
+        const width = Math.round(card.getBoundingClientRect().width / scale);
         if (width !== this.width) {
             this.width = width;
         }
@@ -386,14 +398,16 @@ export class WudQueueCard extends LitElement {
         let content = px(style.borderTopWidth) + px(style.borderBottomWidth) + px(style.paddingTop) + px(style.paddingBottom);
         for (const part of card.querySelectorAll<HTMLElement>(CARD_PARTS)) {
             const partStyle = getComputedStyle(part);
-            const height = part.classList.contains("list") ? listEndHeight(part) : part.getBoundingClientRect().height;
+            const height = part.classList.contains("list") ? listEndHeight(part, scale) : part.getBoundingClientRect().height / scale;
             content += px(partStyle.marginTop) + height + px(partStyle.marginBottom);
         }
         // The spare room as drawn now, which while a slide goes on is somewhere between the old and the new.
         const list = card.querySelector<HTMLElement>(":scope > .list, :scope > .message");
         content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
-        const filled = filledHeight(Math.round(content), this.config ?? {}, limit);
-        const spare = Math.max(0, Math.floor(filled - content));
+        // Up to the whole pixel, so a content a fraction over, such as 120.4, still ends inside the rows. The slack keeps
+        // noise from unscaling mid-scale from costing a pixel either way.
+        const filled = filledHeight(Math.ceil(content - SLACK_PX), this.config ?? {}, limit);
+        const spare = Math.max(0, Math.floor(filled - content + SLACK_PX));
         if (filled !== this.filled) {
             this.filled = filled;
         }

@@ -175,12 +175,6 @@ describe("the two sections", () => {
         expect(root.querySelector<HTMLElement>("ha-card")?.getAttribute("style") ?? "").toBe(style);
     });
 
-    it("asks a sections view for the rows its header, section lines and first waiting row need, and is never held lower", async () => {
-        const element = await card(hass(), { height: 100 });
-        expect(element.getGridOptions()).toMatchObject({ rows: "auto", min_columns: 9, min_rows: 5 });
-        expect(shadow(element).querySelector("ha-card")?.getAttribute("style")).toBe("height: 276px");
-    });
-
     it("puts the header, the status line and the list in that order, with the waiting rows in the open section", async () => {
         const root = shadow(await card(hass(), { height: 300 }));
         const haCard = root.querySelector("ha-card")!;
@@ -280,7 +274,7 @@ describe("installs over time", () => {
         await element.updateComplete;
         const failed = row(shadow(element), "player");
         expect(failed?.querySelector(".ico")?.classList.contains("failed")).toBe(true);
-        expect(shadow(element).querySelector(".errline")?.textContent).toContain("minuutissa");
+        expect(shadow(element).querySelector(".errline")?.textContent).toContain("ei aloittanut päivitystä");
 
         failed?.querySelector<HTMLButtonElement>("button.install")?.click();
         await element.updateComplete;
@@ -537,8 +531,7 @@ describe("with the WUD Queue integration", () => {
     });
 
     it("installs nothing while the queue's sensor is away, rather than going around the queue", async () => {
-        const calls: unknown[][] = [];
-        const state = withQueue(hass(sample(), calls), { items: [] });
+        const state = withQueue(hass(sample()), { items: [] });
         state.states["sensor.wud_queue"] = { entity_id: "sensor.wud_queue", state: "unavailable", last_changed: "", attributes: {} };
         const element = await card(state);
         expect(row(shadow(element), "player")?.querySelector<HTMLButtonElement>("button.install")?.disabled).toBe(true);
@@ -584,6 +577,20 @@ describe("with the WUD Queue integration", () => {
         await new Promise((resolve) => setTimeout(resolve));
         await element.updateComplete;
         expect(action(shadow(element))?.disabled).toBe(false);
+    });
+
+    // The containers after the failed one in its item are not_run, or queued from an older wud_queue. The row goes by the item.
+    it.each(["not_run", "queued"] as const)("shows a group failed with the rest of its containers %s", async (rest) => {
+        const ids = ["update.web_site_a", "update.web_site_b", "update.web_site_c"];
+        const failed = item("node", "failed", ids, {
+            reason: "version",
+            entities: ids.map((id, i) => ({ entity_id: id, from: "26.1.0", to: "26.2.0", status: i === 0 ? "failed" : rest })),
+        });
+        const root = shadow(await card(withQueue(hass(sample()), { state: "failed", items: [failed] })));
+        expect(row(root, "web")?.querySelector(".ico")?.classList.contains("failed")).toBe(true);
+        expect(row(root, "web")?.querySelector("button.install")).not.toBeNull();
+        expect(root.querySelector(".errline")).not.toBeNull();
+        expect(action(root)?.textContent?.trim()).toBe("Yritä uudelleen");
     });
 
     it("shows a failure with its reason, and offers a retry", async () => {

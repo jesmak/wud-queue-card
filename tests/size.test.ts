@@ -142,12 +142,19 @@ describe("the header's check", () => {
 });
 
 describe("filling the rows of a sections view", () => {
-    /** The card's parts given their boxes, rows filled, and the card's style returned. */
-    async function filled(element: WudQueueCard, theme = false, line = 22): Promise<string> {
+    /**
+     * The card's parts given their boxes, rows filled, and the card's style returned. The card is drawn at `scale`, as in a
+     * dialog's opening animation, its boxes scaled and its styles not.
+     */
+    async function filled(element: WudQueueCard, theme = false, line = 22, scale = 1): Promise<string> {
         const haCard = one(element, "ha-card")!;
         const box = (target: Element, height: number) =>
-            (target.getBoundingClientRect = () => ({ top: 0, bottom: height, height, width: 300 }) as DOMRect);
+            (target.getBoundingClientRect = () =>
+                ({ top: 0, bottom: height * scale, height: height * scale, width: 300 * scale }) as DOMRect);
         Object.defineProperty(haCard, "clientWidth", { value: 300, configurable: true });
+        const width = document.createElement("style");
+        width.textContent = "ha-card { width: 300px; }";
+        element.shadowRoot!.append(width);
         box(haCard, 56);
         box(one(element, ".hd")!, 41);
         box(one(element, ".hd-sub")!, 17);
@@ -168,6 +175,17 @@ describe("filling the rows of a sections view", () => {
     ])("on automatic rows, ends on %s", async (_name, config, style) => {
         const element = await card(hass(quiet()), config, "grid");
         expect(await filled(element)).toBe(style);
+    });
+
+    it("on automatic rows, takes another row for a content a fraction over the rows", async () => {
+        const element = await card(hass(quiet()), {}, "grid");
+        // 34.4 px more than the whole rows' 120 takes the content to 120.4.
+        expect(await filled(element, false, 22 + 34.4)).toBe("min-height: 184px; --wq-spare: 63px");
+    });
+
+    it("on automatic rows, fills the same rows while it is drawn scaled", async () => {
+        const element = await card(hass(quiet()), {}, "grid");
+        expect(await filled(element, false, 22, 0.8)).toBe("min-height: 120px; --wq-spare: 34px");
     });
 
     // The limit is rounded down to the rows, but never under the rows the card's least height needs.
@@ -290,7 +308,7 @@ describe("the least height", () => {
 });
 
 describe("held to a height", () => {
-    it("keeps the title, the status line and the section lines to one line, with their text as a tooltip", async () => {
+    it("marks the card held, and gives the title, the status line and the section lines their text as a tooltip", async () => {
         const element = await card(hass(), { height: 300 });
         expect(one(element, "ha-card")!.classList.contains("held")).toBe(true);
         for (const selector of [".hd-title", ".hd-sub", ".switch-text"]) {

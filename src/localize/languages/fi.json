@@ -41,7 +41,7 @@
     },
     "error": {
         "service": "Home Assistant ei välittänyt päivitystä What's Up Dockerille. {message}",
-        "start": "What's Up Docker ei aloittanut päivitystä minuutissa. Onko se käynnissä?",
+        "start": "What's Up Docker ei aloittanut päivitystä. Onko se käynnissä?",
         "version": "Päivitys päättyi, mutta kontti on yhä versiossa {version}. Tarkista What's Up Dockerin lokit.",
         "timeout": "Päivitys ei valmistunut puolessa tunnissa. Tarkista What's Up Dockerin lokit."
     },

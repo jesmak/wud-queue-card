@@ -144,8 +144,9 @@ its outcome isn't followed.
 The install buttons add their rows to the queue instead, and stay usable while it runs. They pause while the queue
 stops, while a row is being added, and while the integration starts up, so nothing goes around the queue. When the
 queue refuses a row, Home Assistant's own notice says why. A thin bar under the title
-has a segment for each row in the queue, and the rows show **Queued**, **Updating**, **Updated**, **Failed** or
-**Not installed**. The button in the header does what fits the moment:
+has a segment for each row in the queue, and the rows show **Queued**, **Updating** or **Updated**. A failed row and
+one left **Not installed** get their install button back, with the status in the row's icon, and a failed row shows
+why under it. The button in the header does what fits the moment:
 
 - **Update all** queues every row waiting.
 - **Stop queue** lets the row being installed finish and leaves the rest.
