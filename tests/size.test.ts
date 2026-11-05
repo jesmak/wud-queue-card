@@ -372,6 +372,19 @@ describe("the room under the one line while nothing waits", () => {
         expect(await large(200)).toBe(true);
     });
 
+    it("makes the check under its line large at once while the list still slides shut, by the room it will have", async () => {
+        const element = await card(hass(quiet([])), { height: 300 });
+        const idle = one(element, ".idle") as HTMLElement;
+        (one(element, ".idle-lines") as HTMLElement).style.height = "40px";
+        Object.defineProperty(idle, "clientHeight", { value: 0, configurable: true });
+        // The shut list still drawn 200 px tall, which all goes to the room once it has slid shut.
+        const list = one(element, ".list") as HTMLElement;
+        list.getBoundingClientRect = () => ({ height: 200, top: 0, bottom: 200 }) as DOMRect;
+        element["measureIdle"]();
+        await element.updateComplete;
+        expect(one(element, ".idle-icon")!.classList.contains("large")).toBe(true);
+    });
+
     const NOW = Date.parse("2026-11-02T12:00:00Z");
     const ago = (days: number) => new Date(NOW - days * 86_400_000).toISOString();
     /** A container without compose, up to date, with its image built `created`. */
