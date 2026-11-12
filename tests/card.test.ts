@@ -107,6 +107,7 @@ describe("the waiting updates", () => {
         expect(buttons.length).toBe(3);
         expect(buttons.every((b) => b.disabled)).toBe(true);
         expect(root.querySelector(".hd-sub")?.textContent).toBe("Päivitetään player");
+        expect(root.querySelector(".hd .hd-icon.running")?.getAttribute("icon")).toBe("mdi:sync");
     });
 });
 
@@ -601,6 +602,7 @@ describe("with the WUD Queue integration", () => {
         };
         const root = shadow(await card(withQueue(hass(sample(), calls), queue)));
         expect(root.querySelector(".hd-sub")?.textContent).toBe("player ei päivittynyt");
+        expect(root.querySelector(".hd .hd-icon.failed")?.getAttribute("icon")).toBe("mdi:alert-circle-outline");
         expect(root.querySelector(".errline")?.textContent).toContain("puolessa tunnissa");
         expect(row(root, "wud")?.querySelector("button.install")).not.toBeNull();
         expect(action(root)?.textContent?.trim()).toBe("Yritä uudelleen");
