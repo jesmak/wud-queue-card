@@ -136,13 +136,13 @@ describe("the height the list ends at once its sections have slid", () => {
     });
 });
 
-describe("the header's check", () => {
+describe("the header's icon", () => {
     it.each([
-        ["shows while nothing waits, as in updates-card", quiet, true],
-        ["is gone while an update waits", sample, false],
-    ])("%s", async (_name, list, shown) => {
+        ["is a check while nothing waits, as in updates-card", quiet, "current", "mdi:check-circle-outline"],
+        ["is an arrow while an update waits", sample, "pending", "mdi:arrow-up-circle-outline"],
+    ])("%s", async (_name, list, state, icon) => {
         const element = await card(hass(list()));
-        expect(one(element, ".hd .hd-icon")?.getAttribute("icon") ?? null).toBe(shown ? "mdi:check-circle-outline" : null);
+        expect(one(element, `.hd .hd-icon.${state}`)?.getAttribute("icon")).toBe(icon);
     });
 });
 

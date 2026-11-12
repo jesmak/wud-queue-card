@@ -1,4 +1,4 @@
-/*! wud-queue-card 1.1.1 | MIT License */
+/*! wud-queue-card 1.1.2 | MIT License */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -604,7 +604,7 @@ function r5(r6) {
 }
 
 // src/const.ts
-var CARD_VERSION = "1.1.1";
+var CARD_VERSION = "1.1.2";
 var START_TIMEOUT = 6e4;
 var VERSION_GRACE = 12e4;
 var DONE_KEEP = 6e5;
@@ -1230,6 +1230,12 @@ function listEndHeight(list, scale = 1) {
   }
   return height;
 }
+var HEADER_ICONS = {
+  current: "mdi:check-circle-outline",
+  pending: "mdi:arrow-up-circle-outline",
+  running: "mdi:sync",
+  failed: "mdi:alert-circle-outline"
+};
 function running(unit, followed) {
   return unit.installing || followed.get(unit.key)?.status === "running";
 }
@@ -1564,11 +1570,12 @@ var WudQueueCard = class extends i4 {
     const currentCount = currentProjects.reduce((n5, p3) => n5 + p3.units.length, 0);
     const open = this.open === "current" ? "current" : pendingUnits.length > 0 ? "pending" : "none";
     const busy = queueEntityId(this.hass) !== void 0 ? !queue || queue.stopping || this.acting : pendingUnits.some((u3) => running(u3, followed));
+    const state = pendingUnits.some((u3) => running(u3, followed)) ? "running" : pendingUnits.some((u3) => followed.get(u3.key)?.status === "failed") ? "failed" : pendingUnits.some((u3) => u3.pending) ? "pending" : "current";
     const idle = pendingUnits.length === 0 && open !== "current" && this.setHeight();
     return b2`
             <ha-card style=${this.cardStyle()} class=${this.cardClass()}>
                 <div class="hd">
-                    ${pendingUnits.length === 0 ? b2`<ha-icon class="hd-icon" icon="mdi:check-circle-outline"></ha-icon>` : A}
+                    <ha-icon class="hd-icon ${state}" icon=${HEADER_ICONS[state]}></ha-icon>
                     <div class="hd-title" title=${title}>${title}</div>
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : A}
                 </div>
@@ -2022,10 +2029,23 @@ var WudQueueCard = class extends i4 {
                     background: var(--error-color, #db4437);
                 }
 
-                /* A check before the title while nothing waits, as in updates-card. */
+                /* An icon before the title for the card's state, as in updates-card. Green is for nothing to do. */
                 .hd-icon {
                     flex: none;
                     color: var(--success-color, #43a047);
+                }
+
+                .hd-icon.pending,
+                .hd-icon.running {
+                    color: var(--primary-color);
+                }
+
+                .hd-icon.running {
+                    animation: spin 1.4s linear infinite;
+                }
+
+                .hd-icon.failed {
+                    color: var(--error-color, #db4437);
                 }
 
                 /* A letter's blank side bearing, about 0.083 em in Roboto, grows with the title's size, so the title moves left by
@@ -2046,7 +2066,7 @@ var WudQueueCard = class extends i4 {
                     color: var(--primary-text-color);
                 }
 
-                /* Under the check, the status line starts where the title does: the header's padding, the icon and the gap. */
+                /* Under the icon, the status line starts where the title does: the header's padding, the icon and the gap. */
                 .hd:has(.hd-icon) + .hd-sub {
                     padding-left: 50px;
                 }
@@ -2577,6 +2597,7 @@ var WudQueueCard = class extends i4 {
                 }
 
                 @media (prefers-reduced-motion: reduce) {
+                    .hd-icon.running,
                     .ico.running {
                         animation: none;
                     }

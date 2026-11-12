@@ -135,6 +135,15 @@ export function listEndHeight(list: HTMLElement, scale = 1): number {
     return height;
 }
 
+type HeaderState = "current" | "pending" | "running" | "failed";
+
+const HEADER_ICONS: Record<HeaderState, string> = {
+    current: "mdi:check-circle-outline",
+    pending: "mdi:arrow-up-circle-outline",
+    running: "mdi:sync",
+    failed: "mdi:alert-circle-outline",
+};
+
 /** Whether a row is installing, by WUD's word or by the install the card or the queue follows. */
 function running(unit: Unit, followed: Map<string, Followed>): boolean {
     return unit.installing || followed.get(unit.key)?.status === "running";
@@ -531,13 +540,22 @@ export class WudQueueCard extends LitElement {
                 ? !queue || queue.stopping || this.acting
                 : pendingUnits.some((u) => running(u, followed));
 
+        // In the status line's order, so the icon before the title and the line under it tell of the same thing.
+        const state: HeaderState = pendingUnits.some((u) => running(u, followed))
+            ? "running"
+            : pendingUnits.some((u) => followed.get(u.key)?.status === "failed")
+              ? "failed"
+              : pendingUnits.some((u) => u.pending)
+                ? "pending"
+                : "current";
+
         // Held to a set height with nothing waiting and nothing open, the room under the one line goes to a check.
         const idle = pendingUnits.length === 0 && open !== "current" && this.setHeight();
 
         return html`
             <ha-card style=${this.cardStyle()} class=${this.cardClass()}>
                 <div class="hd">
-                    ${pendingUnits.length === 0 ? html`<ha-icon class="hd-icon" icon="mdi:check-circle-outline"></ha-icon>` : nothing}
+                    <ha-icon class="hd-icon ${state}" icon=${HEADER_ICONS[state]}></ha-icon>
                     <div class="hd-title" title=${title}>${title}</div>
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : nothing}
                 </div>
@@ -1094,10 +1112,23 @@ export class WudQueueCard extends LitElement {
                     background: var(--error-color, #db4437);
                 }
 
-                /* A check before the title while nothing waits, as in updates-card. */
+                /* An icon before the title for the card's state, as in updates-card. Green is for nothing to do. */
                 .hd-icon {
                     flex: none;
                     color: var(--success-color, #43a047);
+                }
+
+                .hd-icon.pending,
+                .hd-icon.running {
+                    color: var(--primary-color);
+                }
+
+                .hd-icon.running {
+                    animation: spin 1.4s linear infinite;
+                }
+
+                .hd-icon.failed {
+                    color: var(--error-color, #db4437);
                 }
 
                 /* A letter's blank side bearing, about 0.083 em in Roboto, grows with the title's size, so the title moves left by
@@ -1118,7 +1149,7 @@ export class WudQueueCard extends LitElement {
                     color: var(--primary-text-color);
                 }
 
-                /* Under the check, the status line starts where the title does: the header's padding, the icon and the gap. */
+                /* Under the icon, the status line starts where the title does: the header's padding, the icon and the gap. */
                 .hd:has(.hd-icon) + .hd-sub {
                     padding-left: 50px;
                 }
@@ -1649,6 +1680,7 @@ export class WudQueueCard extends LitElement {
                 }
 
                 @media (prefers-reduced-motion: reduce) {
+                    .hd-icon.running,
                     .ico.running {
                         animation: none;
                     }
