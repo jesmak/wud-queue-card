@@ -112,6 +112,9 @@ share a name. When the card shows several watchers, each project's name is follo
 When nothing is waiting, the card is just the title, with a check before it, and a line that opens the up-to-date list. When the first update
 comes in, the waiting list opens by itself, even if the up-to-date list was open.
 
+The icon before the title tells the card's state at a glance, in the theme's colours. It is a check while nothing
+waits, an arrow while updates do, a spinning one while something installs, and a red alert after an install that failed.
+
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/all-current-light.png#gh-light-mode-only" width="490" alt="A card with all containers up to date, folded into a single line">
 <img src="https://raw.githubusercontent.com/jesmak/wud-queue-card/main/docs/images/all-current-dark.png#gh-dark-mode-only" width="490" alt="A card with all containers up to date, folded into a single line">
 
