@@ -965,6 +965,10 @@ function filledHeight(content, config, limit = Infinity) {
 function spareRoom(filled, content) {
   return Math.max(0, Math.floor(filled - content + SLACK_PX));
 }
+function heldSpare(held, content) {
+  const spare = spareRoom(held, content);
+  return spare < ROW_PX ? spare : 0;
+}
 function fillLimit(config, layout, minimum = 0) {
   const rows = config.grid_options ? config.grid_options.rows : config.layout_options?.grid_rows;
   if (layout !== "grid" || typeof rows === "number") {
@@ -1195,7 +1199,8 @@ registry.customCards.push({
   documentationURL: "https://github.com/jesmak/wud-queue-card",
   preview: true
 });
-var HELD_FRAME_PX = 44 + 14 + 12 + 6 + 2 * 34 + 4 + 2;
+var STATUS_LINE_PX = 14;
+var HELD_FRAME_PX = 44 + STATUS_LINE_PX + 12 + 6 + 2 * 34 + 4 + 2;
 var FIRST_ROW_PX = [
   [214, 126],
   [180, 134],
@@ -1317,7 +1322,7 @@ var WudQueueCard = class extends i4 {
    */
   minimumHeight() {
     const width = this.width || Infinity;
-    return HELD_FRAME_PX + FIRST_ROW_PX.find(([least]) => width >= least)[1];
+    return HELD_FRAME_PX - (this.untitled() ? STATUS_LINE_PX : 0) + FIRST_ROW_PX.find(([least]) => width >= least)[1];
   }
   heightStyle() {
     return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
@@ -1446,7 +1451,8 @@ var WudQueueCard = class extends i4 {
       this.width = width;
     }
     const limit = fillLimit(this.config ?? {}, this.layout, this.minimumHeight());
-    if (!limit) {
+    const held = !limit && Boolean(this.heightStyle());
+    if (!limit && !held) {
       if (this.filled) this.filled = 0;
       if (this.spare) this.spare = 0;
       return;
@@ -1460,6 +1466,13 @@ var WudQueueCard = class extends i4 {
     }
     const list = card.querySelector(":scope > .list, :scope > .message");
     content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
+    if (held) {
+      const idle = card.querySelector(":scope > .idle");
+      const spare2 = idle ? 0 : heldSpare(card.getBoundingClientRect().height / scale, content);
+      if (this.filled) this.filled = 0;
+      if (spare2 !== this.spare) this.spare = spare2;
+      return;
+    }
     const filled = filledHeight(content, this.config ?? {}, limit);
     const spare = spareRoom(filled, content);
     if (filled !== this.filled) {
@@ -1472,7 +1485,7 @@ var WudQueueCard = class extends i4 {
   /** The card's inline style: the height it is held to, or the rows it fills up to any limit, with their spare room above the list. */
   cardStyle() {
     const style = filledStyle(this.config ?? {}, this.layout, this.minimumHeight(), this.filled);
-    return this.filled ? `${style}; --wq-spare: ${this.spare}px` : style;
+    return this.spare ? [style, `--wq-spare: ${this.spare}px`].filter(Boolean).join("; ") : style;
   }
   /** The card's classes: held to a height, its texts above the open section keep to one line, and a slide moves its rows along. */
   cardClass() {
@@ -1571,15 +1584,17 @@ var WudQueueCard = class extends i4 {
     const open = this.open === "current" ? "current" : pendingUnits.length > 0 ? "pending" : "none";
     const busy = queueEntityId(this.hass) !== void 0 ? !queue || queue.stopping || this.acting : pendingUnits.some((u3) => running(u3, followed));
     const state = pendingUnits.some((u3) => running(u3, followed)) ? "running" : pendingUnits.some((u3) => followed.get(u3.key)?.status === "failed") ? "failed" : pendingUnits.some((u3) => u3.pending) ? "pending" : "current";
+    const status = this.statusText(pendingUnits, followed, queue);
     const idle = pendingUnits.length === 0 && open !== "current" && this.setHeight();
     return b2`
             <ha-card style=${this.cardStyle()} class=${this.cardClass()}>
                 <div class="hd">
                     <ha-icon class="hd-icon ${state}" icon=${HEADER_ICONS[state]}></ha-icon>
-                    <div class="hd-title" title=${title}>${title}</div>
+                    ${this.untitled() ? b2`<div class="hd-title hd-status" title=${status}>${status}</div>` : b2`<div class="hd-title" title=${title}>${title}</div>`}
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : A}
                 </div>
-                ${this.statusLine(pendingUnits, followed, queue)} ${queue && queue.items.length > 0 ? this.progress(queue) : A}
+                ${this.untitled() ? A : b2`<div class="hd-sub" title=${status}>${status}</div>`}
+                ${queue && queue.items.length > 0 ? this.progress(queue) : A}
                 <div class=${idle ? "list shut" : "list"}>
                     ${pendingUnits.length === 0 ? A : b2`${currentCount === 0 ? A : open === "pending" ? this.switchLine(this.text("common.pending_count", { n: pendingUnits.length }), "pending") : this.switchRow(
       this.text("common.pending_count", { n: pendingUnits.length }),
@@ -1656,21 +1671,24 @@ var WudQueueCard = class extends i4 {
     }
     return days < 730 ? format.format(-Math.round(days / 30.44), "month") : format.format(-Math.round(days / 365.25), "year");
   }
-  /** One line under the title: what is going on, or what is waiting. */
-  statusLine(units, followed, queue) {
-    const line = (text2) => b2`<div class="hd-sub" title=${text2}>${text2}</div>`;
+  /** The line under the title, or in its place without one: what is going on, or what is waiting. */
+  statusText(units, followed, queue) {
     const installing = units.filter((u3) => running(u3, followed));
     if (installing.length > 0) {
-      return line(this.text("common.updating", { name: installing.map((u3) => u3.name).join(", ") }));
+      return this.text("common.updating", { name: installing.map((u3) => u3.name).join(", ") });
     }
     const failed = units.filter((u3) => followed.get(u3.key)?.status === "failed");
     if (failed.length > 0) {
-      return line(this.text("common.failed", { name: failed.map((u3) => u3.name).join(", ") }));
+      return this.text("common.failed", { name: failed.map((u3) => u3.name).join(", ") });
     }
     if (queue?.state === "stopped") {
-      return line(this.text("common.queue_stopped"));
+      return this.text("common.queue_stopped");
     }
-    return line(this.text(units.some((u3) => u3.pending) ? "common.available" : "common.all_current"));
+    return this.text(units.some((u3) => u3.pending) ? "common.available" : "common.all_current");
+  }
+  /** Whether the title is set empty, so the status line takes its place in the header. */
+  untitled() {
+    return this.config?.title === "";
   }
   /** A project with something to install: its label when it has several rows, then the rows. */
   pendingProject(project, active, followed, busy) {
@@ -2064,6 +2082,11 @@ var WudQueueCard = class extends i4 {
                     padding: 0 16px;
                     font-size: 12px;
                     color: var(--primary-text-color);
+                }
+
+                /* With no title, the status line takes its place beside the icon, at its own size. */
+                .hd-title.hd-status {
+                    font-size: 12px;
                 }
 
                 /* Under the icon, the status line starts where the title does: the header's padding, the icon and the gap. */

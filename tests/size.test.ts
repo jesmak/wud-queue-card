@@ -196,12 +196,7 @@ describe("filling the rows of a sections view", () => {
     // The limit is rounded down to the rows, but never under the rows the card's least height needs.
     it.each([
         ["under it, on the rows its content needs", { max_height: 600 }, 22, "max-height: 568px; min-height: 120px; --wq-spare: 34px"],
-        [
-            "over it, on the limit rounded down to the rows",
-            { max_height: 600 },
-            900,
-            "max-height: 568px; min-height: 568px; --wq-spare: 0px",
-        ],
+        ["over it, on the limit rounded down to the rows", { max_height: 600 }, 900, "max-height: 568px; min-height: 568px"],
         [
             "under its least, raised to the rows that needs",
             { max_height: 300 },

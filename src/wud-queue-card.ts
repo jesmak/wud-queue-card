@@ -32,7 +32,7 @@ import { ScrollFade, fadeStyles } from "./fade";
 import type { HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
-import { drawnScale, fillLimit, filledHeight, filledStyle, spareRoom, validRowStep } from "./rows";
+import { drawnScale, fillLimit, filledHeight, filledStyle, heldSpare, spareRoom, validRowStep } from "./rows";
 import type { Container, Project, Queue, Unit, WudQueueCardConfig } from "./types";
 
 console.info(
@@ -61,12 +61,15 @@ registry.customCards.push({
 
 type Section = "pending" | "current";
 
+/** The status line under the title, kept to one line, which a card with no title shows in the title's place instead. */
+const STATUS_LINE_PX = 14;
+
 /**
  * The parts of a held card besides its first waiting row: the header with the round button of a narrow card, the status
- * line kept to one line, the progress bar, the list's top padding, both section lines, the open section's bottom padding
- * and the card's border.
+ * line, the progress bar, the list's top padding, both section lines, the open section's bottom padding and the card's
+ * border.
  */
-const HELD_FRAME_PX = 44 + 14 + 12 + 6 + 2 * 34 + 4 + 2;
+const HELD_FRAME_PX = 44 + STATUS_LINE_PX + 12 + 6 + 2 * 34 + 4 + 2;
 
 /**
  * The most the first waiting row needs on a held card this wide or wider, at any width from there up: a compose project's
@@ -246,7 +249,7 @@ export class WudQueueCard extends LitElement {
      */
     private minimumHeight(): number {
         const width = this.width || Infinity;
-        return HELD_FRAME_PX + FIRST_ROW_PX.find(([least]) => width >= least)![1];
+        return HELD_FRAME_PX - (this.untitled() ? STATUS_LINE_PX : 0) + FIRST_ROW_PX.find(([least]) => width >= least)![1];
     }
 
     private heightStyle(): string {
@@ -393,7 +396,8 @@ export class WudQueueCard extends LitElement {
             this.width = width;
         }
         const limit = fillLimit(this.config ?? {}, this.layout, this.minimumHeight());
-        if (!limit) {
+        const held = !limit && Boolean(this.heightStyle());
+        if (!limit && !held) {
             if (this.filled) this.filled = 0;
             if (this.spare) this.spare = 0;
             return;
@@ -410,6 +414,16 @@ export class WudQueueCard extends LitElement {
         // The spare room as drawn now, which while a slide goes on is somewhere between the old and the new.
         const list = card.querySelector<HTMLElement>(":scope > .list, :scope > .message");
         content -= Math.max(0, list ? px(getComputedStyle(list).marginTop) : 0);
+        // Held to a height, less than a row to spare goes above the list as on filled rows, and more under it. The check
+        // shown while nothing waits grows to take whatever is left, so with it there is none, and as its drawn height
+        // counts as content, it would keep any room once given.
+        if (held) {
+            const idle = card.querySelector(":scope > .idle");
+            const spare = idle ? 0 : heldSpare(card.getBoundingClientRect().height / scale, content);
+            if (this.filled) this.filled = 0;
+            if (spare !== this.spare) this.spare = spare;
+            return;
+        }
         const filled = filledHeight(content, this.config ?? {}, limit);
         const spare = spareRoom(filled, content);
         if (filled !== this.filled) {
@@ -423,7 +437,7 @@ export class WudQueueCard extends LitElement {
     /** The card's inline style: the height it is held to, or the rows it fills up to any limit, with their spare room above the list. */
     private cardStyle(): string {
         const style = filledStyle(this.config ?? {}, this.layout, this.minimumHeight(), this.filled);
-        return this.filled ? `${style}; --wq-spare: ${this.spare}px` : style;
+        return this.spare ? [style, `--wq-spare: ${this.spare}px`].filter(Boolean).join("; ") : style;
     }
 
     /** The card's classes: held to a height, its texts above the open section keep to one line, and a slide moves its rows along. */
@@ -548,6 +562,7 @@ export class WudQueueCard extends LitElement {
               : pendingUnits.some((u) => u.pending)
                 ? "pending"
                 : "current";
+        const status = this.statusText(pendingUnits, followed, queue);
 
         // Held to a set height with nothing waiting and nothing open, the room under the one line goes to a check.
         const idle = pendingUnits.length === 0 && open !== "current" && this.setHeight();
@@ -556,10 +571,15 @@ export class WudQueueCard extends LitElement {
             <ha-card style=${this.cardStyle()} class=${this.cardClass()}>
                 <div class="hd">
                     <ha-icon class="hd-icon ${state}" icon=${HEADER_ICONS[state]}></ha-icon>
-                    <div class="hd-title" title=${title}>${title}</div>
+                    ${
+                        this.untitled()
+                            ? html`<div class="hd-title hd-status" title=${status}>${status}</div>`
+                            : html`<div class="hd-title" title=${title}>${title}</div>`
+                    }
                     ${queue ? this.queueAction(queue, pendingUnits, followed) : nothing}
                 </div>
-                ${this.statusLine(pendingUnits, followed, queue)} ${queue && queue.items.length > 0 ? this.progress(queue) : nothing}
+                ${this.untitled() ? nothing : html`<div class="hd-sub" title=${status}>${status}</div>`}
+                ${queue && queue.items.length > 0 ? this.progress(queue) : nothing}
                 <div class=${idle ? "list shut" : "list"}>
                     ${
                         pendingUnits.length === 0
@@ -664,22 +684,26 @@ export class WudQueueCard extends LitElement {
         return days < 730 ? format.format(-Math.round(days / 30.44), "month") : format.format(-Math.round(days / 365.25), "year");
     }
 
-    /** One line under the title: what is going on, or what is waiting. */
-    private statusLine(units: Unit[], followed: Map<string, Followed>, queue: Queue | undefined): TemplateResult {
-        const line = (text: string) => html`<div class="hd-sub" title=${text}>${text}</div>`;
+    /** The line under the title, or in its place without one: what is going on, or what is waiting. */
+    private statusText(units: Unit[], followed: Map<string, Followed>, queue: Queue | undefined): string {
         const installing = units.filter((u) => running(u, followed));
         if (installing.length > 0) {
-            return line(this.text("common.updating", { name: installing.map((u) => u.name).join(", ") }));
+            return this.text("common.updating", { name: installing.map((u) => u.name).join(", ") });
         }
         const failed = units.filter((u) => followed.get(u.key)?.status === "failed");
         if (failed.length > 0) {
-            return line(this.text("common.failed", { name: failed.map((u) => u.name).join(", ") }));
+            return this.text("common.failed", { name: failed.map((u) => u.name).join(", ") });
         }
         if (queue?.state === "stopped") {
-            return line(this.text("common.queue_stopped"));
+            return this.text("common.queue_stopped");
         }
         // The section line below already counts the waiting updates.
-        return line(this.text(units.some((u) => u.pending) ? "common.available" : "common.all_current"));
+        return this.text(units.some((u) => u.pending) ? "common.available" : "common.all_current");
+    }
+
+    /** Whether the title is set empty, so the status line takes its place in the header. */
+    private untitled(): boolean {
+        return this.config?.title === "";
     }
 
     /** A project with something to install: its label when it has several rows, then the rows. */
@@ -1147,6 +1171,11 @@ export class WudQueueCard extends LitElement {
                     padding: 0 16px;
                     font-size: 12px;
                     color: var(--primary-text-color);
+                }
+
+                /* With no title, the status line takes its place beside the icon, at its own size. */
+                .hd-title.hd-status {
+                    font-size: 12px;
                 }
 
                 /* Under the icon, the status line starts where the title does: the header's padding, the icon and the gap. */

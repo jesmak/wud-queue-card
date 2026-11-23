@@ -150,6 +150,27 @@ describe("the two sections", () => {
         expect(names(shadow(element), ".scroll.pending")).toEqual([]);
     });
 
+    it("puts the status line in the title's place beside the icon when the title is set empty", async () => {
+        const list: HassEntity[] = [entity("update.cache", { image: "library/redis", installed: "8.0.1", service: "cache" })];
+        const titled = await card(hass(list), { height: 400 });
+        const element = await card(hass(list), { title: "", height: 400 });
+        const root = shadow(element);
+        expect(root.querySelector(".hd .hd-title.hd-status")?.textContent).toBe("Kaikki ajan tasalla");
+        expect(root.querySelector(".hd .hd-icon")).not.toBeNull();
+        expect(root.querySelector(".hd-sub")).toBeNull();
+        // The status line no longer takes a row of its own, so the least height a held card needs is that much lower.
+        const least = (e: WudQueueCard) => (e as unknown as { minimumHeight(): number }).minimumHeight();
+        expect(least(titled) - least(element)).toBe(14);
+    });
+
+    it("puts less than a row to spare above the list on a card held to a height", async () => {
+        const list: HassEntity[] = [entity("update.cache", { image: "library/redis", installed: "8.0.1", service: "cache" })];
+        const element = await card(hass(list), { height: 400 });
+        Object.assign(element as unknown as { spare: number }, { spare: 24 });
+        await element.updateComplete;
+        expect(shadow(element).querySelector("ha-card")!.getAttribute("style")).toBe("height: 400px; --wq-spare: 24px");
+    });
+
     it("show only the up-to-date line when nothing is waiting, and it opens and shuts", async () => {
         const list: HassEntity[] = [entity("update.cache", { image: "library/redis", installed: "8.0.1", service: "cache" })];
         const element = await card(hass(list));
