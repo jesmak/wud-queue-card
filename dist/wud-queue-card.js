@@ -1,4 +1,4 @@
-/*! wud-queue-card 1.1.2 | MIT License */
+/*! wud-queue-card 1.2.0 | MIT License */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -604,7 +604,7 @@ function r5(r6) {
 }
 
 // src/const.ts
-var CARD_VERSION = "1.1.2";
+var CARD_VERSION = "1.2.0";
 var START_TIMEOUT = 6e4;
 var VERSION_GRACE = 12e4;
 var DONE_KEEP = 6e5;
@@ -798,6 +798,7 @@ var en_default = {
     not_running_one: "{n} container not running"
   },
   status: {
+    manual: "By hand",
     queued: "Queued",
     running: "Updating",
     done: "Updated",
@@ -818,6 +819,8 @@ var en_default = {
     entities_helper: "If you set update entities by hand, only they are shown.",
     exclude: "Leave out",
     exclude_helper: "Update entities never shown. For when you want to show everything from a device except these.",
+    manual: "Updated by hand",
+    manual_helper: "Update entities whose updates are shown but made by hand. They get no install button, and Update all leaves them out. For containers whose What's Up Docker trigger is excluded, for instance.",
     row_step: "Rounding in a sections view",
     row_step_helper: "With automatic row height, the card's height is rounded up to whole rows, or to half rows to save space.",
     row_step_full: "Whole rows",
@@ -861,6 +864,7 @@ var fi_default = {
     not_running_one: "{n} kontti ei k\xE4ynniss\xE4"
   },
   status: {
+    manual: "K\xE4sin",
     queued: "Jonossa",
     running: "P\xE4ivitet\xE4\xE4n",
     done: "P\xE4ivitetty",
@@ -881,6 +885,8 @@ var fi_default = {
     entities_helper: "Jos asetat k\xE4sin p\xE4ivitysentiteettej\xE4, ainoastaan ne n\xE4ytet\xE4\xE4n.",
     exclude: "J\xE4t\xE4 pois",
     exclude_helper: "P\xE4ivitysentiteetit, joita ei koskaan n\xE4ytet\xE4. Kun haluat n\xE4ytt\xE4\xE4 laitteelta kaiken, paitsi n\xE4m\xE4.",
+    manual: "P\xE4ivitet\xE4\xE4n k\xE4sin",
+    manual_helper: "P\xE4ivitysentiteetit, joiden p\xE4ivitykset n\xE4ytet\xE4\xE4n, mutta tehd\xE4\xE4n k\xE4sin. Niille ei tule p\xE4ivitysnappia, eik\xE4 P\xE4ivit\xE4 kaikki ota niit\xE4 mukaan. Esimerkiksi kontit, joilta What's Up Dockerin p\xE4ivitys on suljettu pois.",
     row_step: "Py\xF6ristys osioihin jaetussa n\xE4kym\xE4ss\xE4",
     row_step_helper: "Automaattisella rivikorkeudella kortin korkeus py\xF6ristet\xE4\xE4n yl\xF6sp\xE4in kokonaisiin riveihin, tai tilan s\xE4\xE4st\xE4miseksi puolikkaisiin riveihin.",
     row_step_full: "Kokonaisiin riveihin",
@@ -1027,6 +1033,7 @@ function schema(hass, config, text2) {
     },
     { name: "entities", selector: { entity: { multiple: true, include_entities: entities } } },
     { name: "exclude", selector: { entity: { multiple: true, include_entities: entities } } },
+    { name: "manual", selector: { entity: { multiple: true, include_entities: entities } } },
     ...rowStepSchema(config, text2)
   ];
 }
@@ -1055,7 +1062,7 @@ var WudQueueCardEditor = class extends i4 {
   }
   valueChanged(event) {
     const config = tidyRowStep(event.detail.value);
-    for (const key of ["title", "device", "entities", "exclude"]) {
+    for (const key of ["title", "device", "entities", "exclude", "manual"]) {
       const value = config[key];
       if (value === void 0 || value === null || String(value) === "" || Array.isArray(value) && value.length === 0) {
         delete config[key];
@@ -1298,13 +1305,14 @@ var WudQueueCard = class extends i4 {
     }
     const entities = list(config.entities);
     const exclude = list(config.exclude);
+    const manual = list(config.manual);
     if (!validHeight(config)) {
       throw new Error(translate(browserLanguage(), "common.invalid_height"));
     }
     if (!validRowStep(config)) {
       throw new Error(translate(browserLanguage(), "common.invalid_row_step"));
     }
-    this.config = { ...config, entities, exclude };
+    this.config = { ...config, entities, exclude, manual };
   }
   getCardSize() {
     const pending = this.projects().flatMap((p3) => p3.units).filter((u3) => u3.pending).length;
@@ -1722,7 +1730,8 @@ var WudQueueCard = class extends i4 {
   }
   /** A row with an update, or one the card has installed since the page was opened. */
   unitRow(unit, followed, busy) {
-    const status = followed?.status ?? (unit.installing ? "running" : "pending");
+    const manual = this.manual(unit);
+    const status = followed?.status ?? (unit.installing ? "running" : manual ? "manual" : "pending");
     const moved = followed?.install.from ?? {};
     const shown = status === "done" ? unit.containers.find((c4) => moved[c4.entity_id] !== c4.installed) ?? unit.containers[0] : unit.containers.find((c4) => c4.pending) ?? unit.containers[0];
     const from = status === "done" ? moved[shown.entity_id] ?? "" : shown.installed;
@@ -1736,7 +1745,7 @@ var WudQueueCard = class extends i4 {
                 </div>
                 <div class="end">
                     ${// A failed row can be tried again. Its error stays under it until then.
-    status === "pending" || status === "failed" || status === "not_run" ? b2`<button
+    !manual && (status === "pending" || status === "failed" || status === "not_run") ? b2`<button
                                   class="install"
                                   ?disabled=${busy}
                                   title=${this.text("common.install", { name: unit.name })}
@@ -1772,6 +1781,7 @@ var WudQueueCard = class extends i4 {
   statusIcon(status) {
     const icons = {
       pending: "mdi:docker",
+      manual: "mdi:hand-back-right-outline",
       queued: "mdi:timer-sand",
       not_run: "mdi:minus-circle-outline",
       running: "mdi:sync",
@@ -1856,6 +1866,11 @@ var WudQueueCard = class extends i4 {
       this.installs = new Map(this.installs).set(unit.key, { ...install, error: message });
     }
   }
+  /** A row whose update is made by hand, which WUD can't install, so the card offers no install for it. */
+  manual(unit) {
+    const manual = this.config?.manual ?? [];
+    return unit.containers.some((c4) => manual.includes(c4.entity_id));
+  }
   /** Opens a row's entity from the keyboard, as a click does. */
   onKey(unit) {
     return (event) => {
@@ -1878,7 +1893,7 @@ var WudQueueCard = class extends i4 {
     if (queue.state === "failed") {
       return this.hass && retryable(this.hass, queue) ? this.actionButton(this.text("common.retry"), "mdi:refresh", false, () => this.call("retry")) : this.actionButton(this.text("common.clear"), "mdi:check", false, () => this.call("clear"));
     }
-    const waiting = units.filter((u3) => u3.pending && !["queued", "running"].includes(followed.get(u3.key)?.status ?? "")).flatMap((u3) => u3.containers.filter((c4) => c4.pending).map((c4) => c4.entity_id));
+    const waiting = units.filter((u3) => u3.pending && !this.manual(u3) && !["queued", "running"].includes(followed.get(u3.key)?.status ?? "")).flatMap((u3) => u3.containers.filter((c4) => c4.pending).map((c4) => c4.entity_id));
     if (waiting.length > 0) {
       return this.actionButton(
         this.text("common.update_all"),
@@ -2275,6 +2290,7 @@ var WudQueueCard = class extends i4 {
                     color: var(--primary-color);
                 }
 
+                .pill.manual,
                 .pill.queued,
                 .pill.not_run {
                     background: var(--wq-track);

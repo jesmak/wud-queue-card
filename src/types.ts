@@ -10,6 +10,8 @@ export interface WudQueueCardConfig extends LovelaceCardConfig, RowStepConfig {
     entities?: string[];
     /** Update entities left out, in either mode. */
     exclude?: string[];
+    /** Update entities whose updates are shown but made by hand, so their rows have no install button. */
+    manual?: string[];
 }
 
 /** A container as the card shows it, read from WUD's update entity. */

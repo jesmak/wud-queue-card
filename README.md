@@ -68,7 +68,8 @@ Leave `WUD_TRIGGER_MQTT_<name>_HASS_ENTITIES` at its default, `all`. In `summary
 instead of an update entity per container, and the card has nothing to show.
 
 The install buttons work when WUD has a trigger that can update the container, such as its Docker or Docker Compose
-trigger. Without one, WUD receives the install and does nothing.
+trigger. Without one, WUD receives the install and does nothing. A container watched only, with its trigger left out
+by `wud.trigger.exclude`, goes in `manual`, so its update is shown with no install button.
 
 The card tells a finished install from a failed one by the container's new version, which WUD notices right away from
 Docker's events. Keep `WUD_WATCHER_<name>_WATCHEVENTS` at its default, `true`. Without the events WUD sees the new
@@ -83,6 +84,7 @@ version only at its next scheduled watch, and until then the card shows an insta
 | `device`      | string | The id of a WUD device, whose update entities the card shows                                                                                                                                                                                                                   | every WUD update entity                                                         |
 | `entities`    | list   | The update entities to show, instead of the card finding them                                                                                                                                                                                                                  | found by the card                                                               |
 | `exclude`     | list   | Update entities never shown, whether found or listed                                                                                                                                                                                                                           |                                                                                 |
+| `manual`      | list   | Update entities whose updates are made by hand. Their rows show the update with no install button, and the queue's Update all leaves them out                                                                                                                                  |                                                                                 |
 | `height_mode` | string | How tall the card is. `auto` fits its content, `fixed` keeps it at `height`, `max` lets it grow up to `max_height`. In `fixed` and `max` the open list scrolls. A height in grid rows, set in the layout tab of a sections view, is used instead                               | `fixed` when `height` is set, `max` when only `max_height` is, otherwise `auto` |
 | `height`      | number | The card's height in pixels, for `fixed`                                                                                                                                                                                                                                       |                                                                                 |
 | `max_height`  | number | The card's greatest height in pixels, for `max`                                                                                                                                                                                                                                |                                                                                 |

@@ -33,6 +33,7 @@
         "not_running_one": "{n} container not running"
     },
     "status": {
+        "manual": "By hand",
         "queued": "Queued",
         "running": "Updating",
         "done": "Updated",
@@ -53,6 +54,8 @@
         "entities_helper": "If you set update entities by hand, only they are shown.",
         "exclude": "Leave out",
         "exclude_helper": "Update entities never shown. For when you want to show everything from a device except these.",
+        "manual": "Updated by hand",
+        "manual_helper": "Update entities whose updates are shown but made by hand. They get no install button, and Update all leaves them out. For containers whose What's Up Docker trigger is excluded, for instance.",
         "row_step": "Rounding in a sections view",
         "row_step_helper": "With automatic row height, the card's height is rounded up to whole rows, or to half rows to save space.",
         "row_step_full": "Whole rows",

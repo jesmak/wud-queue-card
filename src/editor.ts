@@ -28,6 +28,7 @@ function schema(hass: HomeAssistant, config: WudQueueCardConfig, text: (key: str
         },
         { name: "entities", selector: { entity: { multiple: true, include_entities: entities } } },
         { name: "exclude", selector: { entity: { multiple: true, include_entities: entities } } },
+        { name: "manual", selector: { entity: { multiple: true, include_entities: entities } } },
         ...rowStepSchema(config, text),
     ];
 }
@@ -60,7 +61,7 @@ export class WudQueueCardEditor extends LitElement {
     private valueChanged(event: CustomEvent<{ value: WudQueueCardConfig }>): void {
         const config: WudQueueCardConfig = tidyRowStep(event.detail.value);
         // Whatever is emptied is left out, so the configuration stays short.
-        for (const key of ["title", "device", "entities", "exclude"] as const) {
+        for (const key of ["title", "device", "entities", "exclude", "manual"] as const) {
             const value = config[key];
             if (value === undefined || value === null || String(value) === "" || (Array.isArray(value) && value.length === 0)) {
                 delete config[key];

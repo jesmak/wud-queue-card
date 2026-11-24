@@ -467,6 +467,37 @@ describe("with the WUD Queue integration", () => {
         ]);
     });
 
+    it("shows a row updated by hand with no install button, and leaves it out of Update all", async () => {
+        const calls: unknown[][] = [];
+        const element = await card(withQueue(hass(sample(), calls), { items: [] }), { manual: ["update.media_player"] });
+        const root = shadow(element);
+        const player = row(root, "player");
+        expect(player?.querySelector("button.install")).toBeNull();
+        expect(player?.querySelector(".pill.manual")?.textContent?.trim()).toBe("Käsin");
+        expect(player?.querySelector(".sub.ver")?.textContent?.replace(/\s+/g, " ").trim()).not.toBe("");
+
+        action(root)?.click();
+        expect((calls[0][2] as { entity_id: string[] }).entity_id).not.toContain("update.media_player");
+        expect((calls[0][2] as { entity_id: string[] }).entity_id).toContain("update.alpha_app");
+    });
+
+    it("keeps a failed row updated by hand failed, with no install button to try it again", async () => {
+        const queue = { state: "failed" as const, items: [item("player", "failed", ["update.media_player"], { reason: "version" })] };
+        const element = await card(withQueue(hass(sample()), queue), { manual: ["update.media_player"] });
+        const player = row(shadow(element), "player");
+        expect(player?.querySelector(".pill.failed")).not.toBeNull();
+        expect(player?.querySelector("button.install")).toBeNull();
+    });
+
+    it("offers no Update all when only rows updated by hand are waiting", async () => {
+        const state = sample();
+        const ids = state.map((e) => e.entity_id);
+        const element = await card(withQueue(hass(state), { items: [] }), { manual: ids });
+        const root = shadow(element);
+        expect(action(root)).toBeNull();
+        expect(root.querySelectorAll("button.install")).toHaveLength(0);
+    });
+
     it("shows the queue's statuses, keeps the buttons usable and stops the run", async () => {
         const calls: unknown[][] = [];
         const queue = {

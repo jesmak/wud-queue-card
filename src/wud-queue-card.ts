@@ -220,13 +220,14 @@ export class WudQueueCard extends LitElement {
         }
         const entities = list(config.entities);
         const exclude = list(config.exclude);
+        const manual = list(config.manual);
         if (!validHeight(config)) {
             throw new Error(translate(browserLanguage(), "common.invalid_height"));
         }
         if (!validRowStep(config)) {
             throw new Error(translate(browserLanguage(), "common.invalid_row_step"));
         }
-        this.config = { ...config, entities, exclude };
+        this.config = { ...config, entities, exclude, manual };
     }
 
     public getCardSize(): number {
@@ -746,7 +747,8 @@ export class WudQueueCard extends LitElement {
 
     /** A row with an update, or one the card has installed since the page was opened. */
     private unitRow(unit: Unit, followed: Followed | undefined, busy: boolean): TemplateResult {
-        const status = followed?.status ?? (unit.installing ? "running" : "pending");
+        const manual = this.manual(unit);
+        const status = followed?.status ?? (unit.installing ? "running" : manual ? "manual" : "pending");
         // A finished row shows the version it moved from; the first container that moved stands for all.
         const moved = followed?.install.from ?? {};
         const shown =
@@ -765,7 +767,7 @@ export class WudQueueCard extends LitElement {
                 <div class="end">
                     ${
                         // A failed row can be tried again. Its error stays under it until then.
-                        status === "pending" || status === "failed" || status === "not_run"
+                        !manual && (status === "pending" || status === "failed" || status === "not_run")
                             ? html`<button
                                   class="install"
                                   ?disabled=${busy}
@@ -810,6 +812,7 @@ export class WudQueueCard extends LitElement {
     private statusIcon(status: string): TemplateResult {
         const icons: Record<string, string> = {
             pending: "mdi:docker",
+            manual: "mdi:hand-back-right-outline",
             queued: "mdi:timer-sand",
             not_run: "mdi:minus-circle-outline",
             running: "mdi:sync",
@@ -927,6 +930,12 @@ export class WudQueueCard extends LitElement {
         }
     }
 
+    /** A row whose update is made by hand, which WUD can't install, so the card offers no install for it. */
+    private manual(unit: Unit): boolean {
+        const manual = this.config?.manual ?? [];
+        return unit.containers.some((c) => manual.includes(c.entity_id));
+    }
+
     /** Opens a row's entity from the keyboard, as a click does. */
     private onKey(unit: Unit): (event: KeyboardEvent) => void {
         return (event) => {
@@ -951,7 +960,7 @@ export class WudQueueCard extends LitElement {
                 : this.actionButton(this.text("common.clear"), "mdi:check", false, () => this.call("clear"));
         }
         const waiting = units
-            .filter((u) => u.pending && !["queued", "running"].includes(followed.get(u.key)?.status ?? ""))
+            .filter((u) => u.pending && !this.manual(u) && !["queued", "running"].includes(followed.get(u.key)?.status ?? ""))
             .flatMap((u) => u.containers.filter((c) => c.pending).map((c) => c.entity_id));
         if (waiting.length > 0) {
             return this.actionButton(this.text("common.update_all"), "mdi:update", false, () =>
@@ -1364,6 +1373,7 @@ export class WudQueueCard extends LitElement {
                     color: var(--primary-color);
                 }
 
+                .pill.manual,
                 .pill.queued,
                 .pill.not_run {
                     background: var(--wq-track);

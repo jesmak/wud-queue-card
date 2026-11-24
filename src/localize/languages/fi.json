@@ -33,6 +33,7 @@
         "not_running_one": "{n} kontti ei käynnissä"
     },
     "status": {
+        "manual": "Käsin",
         "queued": "Jonossa",
         "running": "Päivitetään",
         "done": "Päivitetty",
@@ -53,6 +54,8 @@
         "entities_helper": "Jos asetat käsin päivitysentiteettejä, ainoastaan ne näytetään.",
         "exclude": "Jätä pois",
         "exclude_helper": "Päivitysentiteetit, joita ei koskaan näytetä. Kun haluat näyttää laitteelta kaiken, paitsi nämä.",
+        "manual": "Päivitetään käsin",
+        "manual_helper": "Päivitysentiteetit, joiden päivitykset näytetään, mutta tehdään käsin. Niille ei tule päivitysnappia, eikä Päivitä kaikki ota niitä mukaan. Esimerkiksi kontit, joilta What's Up Dockerin päivitys on suljettu pois.",
         "row_step": "Pyöristys osioihin jaetussa näkymässä",
         "row_step_helper": "Automaattisella rivikorkeudella kortin korkeus pyöristetään ylöspäin kokonaisiin riveihin, tai tilan säästämiseksi puolikkaisiin riveihin.",
         "row_step_full": "Kokonaisiin riveihin",
