@@ -13,7 +13,7 @@ import { LitElement, css, html, nothing } from "lit";
 import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { CARD_VERSION, DONE_KEEP } from "./const";
+import { CARD_VERSION, DEFAULT_SCROLL_INDICATOR, DONE_KEEP } from "./const";
 import {
     containerOf,
     follow,
@@ -28,7 +28,7 @@ import {
 } from "./containers";
 import type { Followed, Install } from "./containers";
 import "./editor";
-import { ScrollFade, fadeStyles } from "./fade";
+import { ScrollFade, fadeStyles, scrollIndicator, validScrollIndicator } from "./fade";
 import type { HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
@@ -193,7 +193,11 @@ export class WudQueueCard extends LitElement {
         super();
         // Fades the edges of what scrolls while the card is held to a height, the open section or the lines under the shut one,
         // through the card's own lifecycle.
-        new ScrollFade(this, () => (this.heightStyle() ? this.renderRoot.querySelectorAll<HTMLElement>(".fold.open .scroll, .idle") : []));
+        new ScrollFade(
+            this,
+            () => (this.heightStyle() ? this.renderRoot.querySelectorAll<HTMLElement>(".fold.open .scroll, .idle") : []),
+            () => scrollIndicator(this.config ?? {}, DEFAULT_SCROLL_INDICATOR),
+        );
     }
 
     public static getConfigElement(): HTMLElement {
@@ -226,6 +230,9 @@ export class WudQueueCard extends LitElement {
         }
         if (!validRowStep(config)) {
             throw new Error(translate(browserLanguage(), "common.invalid_row_step"));
+        }
+        if (!validScrollIndicator(config)) {
+            throw new Error(translate(browserLanguage(), "common.invalid_scroll_indicator"));
         }
         this.config = { ...config, entities, exclude, manual };
     }

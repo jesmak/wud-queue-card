@@ -1,7 +1,8 @@
+import type { ScrollIndicatorConfig } from "./fade";
 import type { LovelaceCardConfig } from "./hass";
 import type { RowStepConfig } from "./rows";
 
-export interface WudQueueCardConfig extends LovelaceCardConfig, RowStepConfig {
+export interface WudQueueCardConfig extends LovelaceCardConfig, RowStepConfig, ScrollIndicatorConfig {
     /** Shown at the top of the card. Without one the card is titled in the viewer's language. */
     title?: string;
     /** Every WUD update entity of this device. Without `device` or `entities`, every WUD update entity there is. */
