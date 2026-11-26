@@ -238,10 +238,11 @@ fetches nothing itself, and talks to WUD only through `update.install` or the qu
 ## Translating
 
 The card's texts are in `src/localize/languages/`, one JSON file per language, named by its language code, such as
-`en.json` and `fi.json`. To add a language, copy `en.json` to the new language's code, such as `sv.json`, and
-translate the values. Nothing else needs changing. The card finds the file by itself and uses it when Home Assistant
-is set to that language. A text left out falls back to English. Container, project and version names come from WUD
-as they are.
+`en.json` and `fi.json`. To add a language, copy `en.json` to the new language's code, such as `sv.json`, and translate
+the values. A file may name a region, such as `pt-br.json`. It is used for `pt-BR`, falling back to a file for the
+language alone (`pt.json`), and then to English. Nothing else needs changing. The card finds the file by itself and uses
+it when Home Assistant is set to that language. A text left out falls back to English. Container, project and version
+names come from WUD as they are.
 
 ## Development
 
